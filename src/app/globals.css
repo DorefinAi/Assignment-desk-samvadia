@@ -11,16 +11,17 @@ body {
 }
 
 body {
-  background: #efefef;
-  color: #000;
-  font-family: "Segoe UI", Tahoma, "Nirmala UI", "Noto Sans Devanagari", Arial, sans-serif;
-  font-size: 12px;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* The focus ring colour follows the theme ink; see MuiProvider */
 button:focus-visible,
+a:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid #0067c0;
-  outline-offset: -1px;
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid var(--focus-ring, #000);
+  outline-offset: 2px;
 }
