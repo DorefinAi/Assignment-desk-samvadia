@@ -110,7 +110,9 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
         merge(res.item);
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-          setNotice("Someone else changed this story at the same time. It has been reloaded; check your edit.");
+          // The backend says which refusal it is: someone else saved first, the slug is taken, or the story is
+          // already in the Octopus feed so its slug is frozen. Show its reason, with the story as it is now.
+          setNotice(`${err.message} The story has been reloaded.`);
           api<{ item: ApiItem }>(`/desk/items/${id}`).then((r) => merge(r.item)).catch(() => undefined);
         } else fail(err);
       }
