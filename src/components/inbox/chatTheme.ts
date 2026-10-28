@@ -104,3 +104,23 @@ export const initials = (name: string) =>
     .map((w) => w[0])
     .join("")
     .toUpperCase();
+
+/** The chat list's round filter pills (sources, status tabs, list filters) */
+export const pillSx = (c: ChatColors, active: boolean) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 0.5,
+  height: 30,
+  px: 1.25,
+  border: 0,
+  borderRadius: "999px",
+  backgroundColor: active ? c.pill : c.bar,
+  color: active ? c.pillText : c.meta,
+  fontFamily: "inherit",
+  fontSize: "0.75rem",
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  flexShrink: 0,
+  "&:hover": { filter: "brightness(0.97)" },
+});

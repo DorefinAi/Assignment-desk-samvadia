@@ -24,6 +24,8 @@ export type Permission =
   | "feed.view"
   | "feed.manage"
   | "feed.xml"
+  | "reporters.view"
+  | "reporters.manage"
   | "access.view"
   | "access.manage";
 
@@ -45,6 +47,9 @@ export const PERMISSIONS: Record<Permission, { label: string; roles: Role[] }> =
   "feed.view": { label: "See the RSS feed", roles: ADMINS },
   "feed.manage": { label: "Take entries out of the feed, send updates", roles: ADMINS },
   "feed.xml": { label: "See and copy the raw feed XML", roles: SUPER_ONLY },
+  "reporters.view": { label: "See the reporter list", roles: DESK_AND_UP },
+  // Matches the backend's reporters.manage
+  "reporters.manage": { label: "Add and edit reporters", roles: ADMINS },
   "access.view": { label: "See users and roles", roles: ADMINS },
   "access.manage": { label: "Change users' roles", roles: ADMINS },
 };
@@ -57,6 +62,7 @@ export const ROUTE_PERMISSION: Record<string, Permission> = {
   "/inbox": "intake.view",
   "/ftp": "ftp.view",
   "/feed": "feed.view",
+  "/reporters": "reporters.view",
   "/access": "access.view",
 };
 

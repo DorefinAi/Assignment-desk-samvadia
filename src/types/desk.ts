@@ -85,7 +85,81 @@ export interface IntakeItem {
   reporterId?: string;
   /** Backend only: shadow-mode item; the AI suggestions stay hidden for it */
   blind?: boolean;
+  /** Build 1 backend only. Each is missing on an older backend, and the UI piece that shows it stays hidden. */
+  reporterSlug?: string | null;
+  parsed?: ParsedSlug | null;
+  district?: District | null;
+  kind?: ItemKind;
+  footage?: Footage;
 }
+
+// --- Build 1: reporter slug, district, kind and FTP footage --------------------------------------
+
+export type ItemKind = "story" | "press_release" | "day_plan" | "not_a_story";
+export const ITEM_KINDS: ItemKind[] = ["story", "press_release", "day_plan", "not_a_story"];
+export type KindCounts = Record<ItemKind, number>;
+
+/** What the backend read out of the reporter's slug; every field may be null */
+export interface ParsedSlug {
+  date: string | null;
+  cityToken: string | null;
+  /** AV, AVB, PKG, SPL, WT, 121, PTC, GFX, VOXPOP */
+  type: string | null;
+  reporterName: string | null;
+}
+
+export interface District {
+  code: string;
+  name: string;
+  nameHi?: string | null;
+  /** Only from GET /desk/districts */
+  ftpFolder?: string | null;
+}
+
+export type FootageStatus = "not_checked" | "waiting" | "found" | "not_found" | "manual";
+export const FOOTAGE_STATUSES: FootageStatus[] = ["not_checked", "waiting", "found", "not_found", "manual"];
+
+export interface FootageFile {
+  name: string;
+  bytes: number;
+  modified: string | null;
+}
+
+export interface Footage {
+  status: FootageStatus;
+  path: string | null;
+  files: FootageFile[];
+  bytes: number;
+  checkedAt: string | null;
+  waitUntil: string | null;
+}
+
+/** One row of GET /desk/ftp/browse */
+export interface FtpEntry {
+  name: string;
+  dir: boolean;
+  bytes: number | null;
+  modified: string | null;
+}
+
+export interface FtpListing {
+  path: string;
+  entries: FtpEntry[];
+}
+
+/** Inbox time window. Custom times are IST wall-clock values ("2026-10-27T09:30"). */
+export type RangePreset = "any" | "1h" | "today" | "24h" | "custom";
+
+export interface InboxFilters {
+  range: RangePreset;
+  customFrom: string;
+  customTo: string;
+  kind: ItemKind;
+  /** District code, or null for every district */
+  district: string | null;
+}
+
+export const DEFAULT_FILTERS: InboxFilters = { range: "any", customFrom: "", customTo: "", kind: "story", district: null };
 
 export interface FtpFolder {
   id: string;

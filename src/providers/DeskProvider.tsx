@@ -1,7 +1,8 @@
 "use client";
 
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityEntry, FeedEntry, FetchRun, FtpFolder, IntakeItem, StoryDraft } from "@/types/desk";
+import { ActivityEntry, DEFAULT_FILTERS, FeedEntry, FetchRun, FtpFolder, InboxFilters, IntakeItem, StoryDraft } from "@/types/desk";
+import { matchesFilters } from "@/lib/ist";
 import { buildInitialState, DeskState, INCOMING, toIncomingItem } from "@/data/intakeData";
 import { buildSlug, dayOf, relocateSlug, slugError, uniqueSlug } from "@/lib/slug";
 import { assignableRoles, canManageUser, Role, ROLE_META } from "@/lib/rbac";
@@ -38,6 +39,10 @@ export function DeskProvider(props: { reviewer: string; role: Role; children: Re
 
 function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role: Role; children: ReactNode }) {
   const [state, setState] = useState<DeskState>(buildInitialState);
+  // Sample data has no kind, district or footage, so only the time filter does anything here
+  const [filters, setFilterState] = useState<InboxFilters>(DEFAULT_FILTERS);
+  const setFilters = useCallback((patch: Partial<InboxFilters>) => setFilterState((f) => ({ ...f, ...patch })), []);
+  const shownItems = useMemo(() => state.items.filter((i) => matchesFilters(i, filters)), [state.items, filters]);
   // The signed-in user shows with the role they signed in as
   const [users, setUsers] = useState<DeskUser[]>(() => USERS.map((u) => (u.username === reviewer ? { ...u, role } : u)));
   const queue = useRef({ whatsapp: INCOMING.filter((s) => s.source === "whatsapp"), outlook: INCOMING.filter((s) => s.source === "outlook") });
@@ -216,8 +221,9 @@ function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role
   );
 
   const reject = useCallback(
-    (id: string, reason: string) => {
-      setState((s) => log(patchItem(s, id, (it) => ({ ...it, stage: "rejected", rejectReason: reason, reviewedBy: reviewer })), `Rejected “${s.items.find((i) => i.id === id)?.draft.headline}”: ${reason}`, "error"));
+    (id: string, reason: string, note?: string) => {
+      const why = note ? `${reason}: ${note}` : reason;
+      setState((s) => log(patchItem(s, id, (it) => ({ ...it, stage: "rejected", rejectReason: why, reviewedBy: reviewer })), `Rejected “${s.items.find((i) => i.id === id)?.draft.headline}”: ${why}`, "error"));
     },
     [reviewer]
   );
@@ -273,6 +279,7 @@ function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role
   const value = useMemo<DeskContextValue>(
     () => ({
       ...state,
+      items: shownItems,
       reviewer,
       role,
       users,
@@ -294,8 +301,15 @@ function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role
       renameFolder,
       pushFeedUpdate,
       setFeedLive,
+      filters,
+      setFilters,
+      kindCounts: null,
+      districts: [],
+      recheckFootage: async () => {},
+      setFootage: async () => "The FTP needs the backend.",
+      browseFtp: () => Promise.reject(new Error("The FTP needs the backend.")),
     }),
-    [state, reviewer, role, users, setUserRole, refresh, updateDraft, resetSlug, applyAi, cycleAiHeadline, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive]
+    [state, shownItems, filters, setFilters, reviewer, role, users, setUserRole, refresh, updateDraft, resetSlug, applyAi, cycleAiHeadline, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive]
   );
 
   return <DeskContext.Provider value={value}>{children}</DeskContext.Provider>;

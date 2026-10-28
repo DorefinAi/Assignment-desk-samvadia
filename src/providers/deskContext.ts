@@ -3,7 +3,7 @@
 // What every desk screen reads and calls. Two providers fill it: the demo one (sample data, the default)
 // and the backend one (NEXT_PUBLIC_API_URL set). Screens never know which one they have.
 import { createContext, useContext } from "react";
-import { ActivityEntry, FeedEntry, FetchRun, FtpFolder, IntakeItem, StoryDraft } from "@/types/desk";
+import { ActivityEntry, District, FeedEntry, FetchRun, FtpFolder, FtpListing, InboxFilters, IntakeItem, KindCounts, StoryDraft } from "@/types/desk";
 import { Role } from "@/lib/rbac";
 import { DeskUser } from "@/data/users";
 
@@ -47,12 +47,27 @@ export interface DeskContextValue {
   applyAi: (id: string, part: "headline" | "body" | "all") => void;
   cycleAiHeadline: (id: string) => void;
   approve: (id: string) => void;
-  reject: (id: string, reason: string) => void;
+  reject: (id: string, reason: string, note?: string) => void;
   reopen: (id: string) => void;
   retryDownload: (itemId: string, attachmentId: string) => void;
   renameFolder: (folderId: string, slug: string, locationCode: string) => string | null;
   pushFeedUpdate: (itemId: string) => void;
   setFeedLive: (entryId: string, live: boolean) => void;
+
+  // --- Build 1 ---
+  /** Inbox list filters; the backend applies them to `items` */
+  filters: InboxFilters;
+  setFilters: (patch: Partial<InboxFilters>) => void;
+  /** Items per kind for the current time window; null when the backend doesn't send it (selector hidden) */
+  kindCounts: KindCounts | null;
+  /** Districts for the filter and the folder picker; empty when the backend has none (filter hidden) */
+  districts: District[];
+  /** Run the footage matcher now */
+  recheckFootage: (id: string) => Promise<void>;
+  /** Set (or clear, with null) the footage folder by hand. Resolves to an error message, or null when saved. */
+  setFootage: (id: string, path: string | null) => Promise<string | null>;
+  /** Read-only FTP listing for the folder picker */
+  browseFtp: (path: string) => Promise<FtpListing>;
 }
 
 export const DeskContext = createContext<DeskContextValue | null>(null);

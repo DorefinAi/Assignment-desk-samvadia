@@ -9,6 +9,7 @@ import { Attachment, IntakeItem } from "@/types/desk";
 import { KIND_ICON } from "@/components/common/shared";
 import { useNow } from "@/hooks/useNow";
 import ChatAvatar from "./ChatAvatar";
+import StoryMeta, { hasStoryMeta } from "./StoryMeta";
 import { ChatColors, useChatColors } from "./chatTheme";
 
 interface MessageProps {
@@ -70,6 +71,7 @@ export function WhatsAppMessage({ item, onRetry }: MessageProps) {
         {item.sender.name}
         <Box component="span" sx={{ fontWeight: 400, color: c.meta }}> · {item.sender.role}</Box>
       </Typography>
+      <StoryMeta item={item} color={c.meta} sx={{ mt: 0.25, mb: 0.5 }} />
       {item.attachments.length > 0 && (
         <Box component="ul" aria-label={`${item.attachments.length} attachments`} sx={{ listStyle: "none", m: 0, p: 0, mt: 0.5, mb: 0.75, display: "flex", flexDirection: "column", gap: 0.5 }}>
           {item.attachments.map((file) => {
@@ -121,9 +123,10 @@ export function EmailMessage({ item, onRetry }: MessageProps) {
   const now = useNow(60000);
   return (
     <Box component="article" sx={{ width: "100%", maxWidth: 980, color: "text.primary" }}>
-      <Typography component="h2" sx={{ fontSize: "1.375rem", fontWeight: 400, lineHeight: 1.4, pl: MAIL_INDENT, mb: 2.5 }}>
+      <Typography component="h2" sx={{ fontSize: "1.375rem", fontWeight: 400, lineHeight: 1.4, pl: MAIL_INDENT, mb: hasStoryMeta(item) ? 1 : 2.5 }}>
         {item.subject || "(no subject)"}
       </Typography>
+      <StoryMeta item={item} color={c.mailMeta} sx={{ pl: MAIL_INDENT, mb: 2.5 }} />
 
       <Box sx={{ display: "flex", gap: 1.5 }}>
         <Box sx={{ display: { xs: "none", sm: "block" } }}>

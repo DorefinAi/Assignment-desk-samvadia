@@ -5,9 +5,10 @@
 //   edits:     typed changes are kept here and sent as one PATCH a moment after typing stops
 //   decisions: any unsent edit goes first, then approve / reject / reopen
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FeedEntry, FetchRun, FtpFolder, IntakeItem, StoryDraft } from "@/types/desk";
+import { DEFAULT_FILTERS, District, FeedEntry, FetchRun, FtpFolder, FtpListing, InboxFilters, IntakeItem, KindCounts, StoryDraft } from "@/types/desk";
 import { api, API_URL, ApiError } from "@/lib/api";
-import { ApiItem, ApiReporter, rejectBody, toIntakeItem } from "@/lib/apiItems";
+import { ApiDistrict, ApiItem, ApiItemList, ApiReporter, itemOf, rejectBody, toDistrict, toFtpListing, toIntakeItem, toKindCounts } from "@/lib/apiItems";
+import { matchesFilters, rangeWindow, toIstIso } from "@/lib/ist";
 import { dayOf } from "@/lib/slug";
 import { can, isRole, Role } from "@/lib/rbac";
 import { DeskUser } from "@/data/users";
@@ -21,6 +22,16 @@ type DraftField = keyof StoryDraft;
 /** The desk's draft fields, as the backend's PATCH fields */
 const PATCH_FIELD: Partial<Record<DraftField, string>> = { headline: "headline", body: "body", category: "category", priority: "priority", locationCode: "city_code", slug: "slug" };
 
+/** GET /desk/items query for the inbox filters (contract section 2). An older backend ignores the new parameters. */
+function itemsQuery(filters: InboxFilters): string {
+  const q = new URLSearchParams({ full: "true", limit: "200", kind: filters.kind });
+  const { from, to } = rangeWindow(filters);
+  if (from !== null) q.set("from", toIstIso(from));
+  if (to !== null) q.set("to", toIstIso(to));
+  if (filters.district) q.set("district", filters.district);
+  return q.toString();
+}
+
 interface Pending {
   patch: Partial<StoryDraft>;
   timer: ReturnType<typeof setTimeout> | null;
@@ -33,6 +44,12 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
   const [runs, setRuns] = useState<FetchRun[]>([]);
   const [users, setUsers] = useState<DeskUser[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [filters, setFilterState] = useState<InboxFilters>(DEFAULT_FILTERS);
+  const [kindCounts, setKindCounts] = useState<KindCounts | null>(null);
+  const [districts, setDistricts] = useState<District[]>([]);
+  const filtersRef = useRef(filters);
+  /** Only the newest list request may land, so a slow answer for an old filter can't overwrite a new one */
+  const loadSeq = useRef(0);
   const versions = useRef(new Map<string, number>());
   const pending = useRef(new Map<string, Pending>());
 
@@ -54,7 +71,14 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
   }, []);
 
   const load = useCallback(async () => {
-    const { items: rows } = await api<{ items: ApiItem[] }>("/desk/items?full=true&limit=200");
+    const current = filtersRef.current;
+    const seq = ++loadSeq.current;
+    const res = await api<ApiItemList>(`/desk/items?${itemsQuery(current)}`);
+    if (seq !== loadSeq.current) return;
+    const counts = toKindCounts(res.kind_counts);
+    setKindCounts(counts);
+    // An older backend ignores from/to; apply them here too so the time filter still works
+    const rows = counts ? res.items : res.items.filter((r) => matchesFilters({ receivedAt: r.received_at }, current));
     rows.forEach((r) => versions.current.set(r.id, r.version));
     setRaw(Object.fromEntries(rows.map((r) => [r.id, r])));
     setItems(rows.map((r) => withLocalEdits(toIntakeItem(r))));
@@ -62,11 +86,13 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
 
   /** Reporters for the picker, the fetch history and (admins) the user list. Each may fail on its own. */
   const loadLists = useCallback(async () => {
-    const [rep, fetched, people] = await Promise.allSettled([
+    const [rep, fetched, people, dist] = await Promise.allSettled([
       api<{ reporters: ApiReporter[] }>("/desk/reporters"),
       api<{ runs: { id: number; source: FetchRun["source"]; added: number; titles: string[]; at: string }[] }>("/desk/fetch-runs"),
       can(role, "access.manage") ? api<{ users: { id: string; name: string; username: string; role: string }[] }>("/admin/users") : Promise.reject(),
+      api<{ districts: ApiDistrict[] }>("/desk/districts"),
     ]);
+    if (dist.status === "fulfilled" && Array.isArray(dist.value?.districts)) setDistricts(dist.value.districts.map(toDistrict).filter((d): d is District => d !== null));
     if (rep.status === "fulfilled") setReporters(rep.value.reporters.map((r) => ({ id: r.id, name: r.name, cityCode: r.city_code, slugCode: r.slug_code })));
     if (fetched.status === "fulfilled") setRuns(fetched.value.runs.map((r) => ({ ...r, id: String(r.id) })));
     if (people.status === "fulfilled") setUsers(people.value.users.filter((u) => isRole(u.role)).map((u) => ({ id: u.id, name: u.name, username: u.username, role: u.role as Role })));
@@ -75,7 +101,7 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
   // First load, the side lists, and live updates from the backend
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- state is set when the requests return, not during the effect
-    Promise.all([load(), loadLists()]).catch(fail);
+    loadLists().catch(fail);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const reload = () => {
@@ -92,6 +118,14 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
       clearTimeout(timer);
     };
   }, [load, loadLists, fail]);
+
+  // The list itself: first load, and again whenever a filter changes
+  useEffect(() => {
+    filtersRef.current = filters;
+    load().catch(fail);
+  }, [filters, load, fail]);
+
+  const setFilters = useCallback((patch: Partial<InboxFilters>) => setFilterState((f) => ({ ...f, ...patch })), []);
 
   // ─── Editing ───────────────────────────────────────────────────────────────
   const save = useCallback(
@@ -151,7 +185,7 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
 
   const resetSlug = useCallback((id: string) => void act(id, `/desk/items/${id}/slug/reset`), [act]);
   const approve = useCallback((id: string) => void act(id, `/desk/items/${id}/approve`), [act]);
-  const reject = useCallback((id: string, reason: string) => void act(id, `/desk/items/${id}/reject`, rejectBody(reason)), [act]);
+  const reject = useCallback((id: string, reason: string, note?: string) => void act(id, `/desk/items/${id}/reject`, rejectBody(reason, note)), [act]);
   const reopen = useCallback((id: string) => void act(id, `/desk/items/${id}/reopen`), [act]);
   const retryDownload = useCallback((itemId: string, mediaId: string) => void act(itemId, `/desk/media/${mediaId}/retry`), [act]);
   const pushFeedUpdate = useCallback((itemId: string) => void act(itemId, `/desk/items/${itemId}/publish-update`), [act]);
@@ -198,6 +232,43 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
     },
     [fail]
   );
+
+  // ─── Footage (build 1) ─────────────────────────────────────────────────────
+  const recheckFootage = useCallback(
+    async (id: string) => {
+      try {
+        const res = await api<ApiItem | { item: ApiItem }>(`/desk/items/${id}/footage/recheck`, { method: "POST" });
+        merge(itemOf(res));
+      } catch (err) {
+        fail(err);
+      }
+    },
+    [merge, fail]
+  );
+
+  const setFootage = useCallback(
+    async (id: string, path: string | null): Promise<string | null> => {
+      try {
+        await flush(id);
+        const res = await api<ApiItem | { item: ApiItem }>(`/desk/items/${id}/footage`, { method: "PUT", body: { path, version: versions.current.get(id) } });
+        merge(itemOf(res));
+        return null;
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 409) {
+          // Stale version: take the server's copy so the next try carries the new version
+          await api<{ item: ApiItem }>(`/desk/items/${id}`).then((r) => merge(r.item)).catch(() => undefined);
+          return "This story changed while you were picking. It has been reloaded; choose the folder again.";
+        }
+        return err instanceof Error ? err.message : "Could not save the folder. Try again.";
+      }
+    },
+    [flush, merge]
+  );
+
+  const browseFtp = useCallback(async (path: string): Promise<FtpListing> => {
+    const raw = await api<Parameters<typeof toFtpListing>[0]>(`/desk/ftp/browse?${new URLSearchParams({ path })}`);
+    return toFtpListing(raw);
+  }, []);
 
   const refresh = useCallback(() => {
     api("/desk/refresh", { method: "POST" })
@@ -253,8 +324,15 @@ export default function ApiDeskProvider({ reviewer, role, children }: { reviewer
       renameFolder,
       pushFeedUpdate,
       setFeedLive,
+      filters,
+      setFilters,
+      kindCounts,
+      districts,
+      recheckFootage,
+      setFootage,
+      browseFtp,
     }),
-    [items, folders, feed, runs, reviewer, role, users, reporters, notice, setUserRole, refresh, updateDraft, resetSlug, setReporter, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive]
+    [items, folders, feed, runs, reviewer, role, users, reporters, notice, setUserRole, refresh, updateDraft, resetSlug, setReporter, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive, filters, setFilters, kindCounts, districts, recheckFootage, setFootage, browseFtp]
   );
 
   return <DeskContext.Provider value={value}>{children}</DeskContext.Provider>;

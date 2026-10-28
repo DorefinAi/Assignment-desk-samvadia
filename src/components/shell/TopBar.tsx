@@ -6,7 +6,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Box, Divider, IconButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography } from "@mui/material";
-import { FolderTree, Inbox, LayoutDashboard, LogOut, Moon, Rss, ShieldCheck, Sun } from "lucide-react";
+import { Contact, FolderTree, Inbox, LayoutDashboard, LogOut, Moon, Rss, ShieldCheck, Sun } from "lucide-react";
 import VartamaanMark from "./VartamaanMark";
 import { useDesk } from "@/providers/DeskProvider";
 import { useThemeMode } from "@/providers/MuiProvider";
@@ -25,6 +25,7 @@ export default function TopBar({ session, onLogout }: { session: Session; onLogo
     { label: "Intake", Icon: Inbox, path: "/inbox", badge: toReview },
     { label: "FTP folders", Icon: FolderTree, path: "/ftp" },
     { label: "RSS feed", Icon: Rss, path: "/feed" },
+    { label: "Reporters", Icon: Contact, path: "/reporters" },
     { label: "Users and roles", Icon: ShieldCheck, path: "/access" },
   ].filter((t) => can(role, ROUTE_PERMISSION[t.path]));
 

@@ -2,13 +2,17 @@
 
 // The chat list: one row per incoming message, newest first.
 import React, { useState } from "react";
-import { Box, IconButton, InputAdornment, InputBase, Tooltip, Typography } from "@mui/material";
+import { Box, Button, IconButton, InputAdornment, InputBase, Tooltip, Typography } from "@mui/material";
 import { ArrowLeft, Search } from "lucide-react";
 import { IntakeItem, Source } from "@/types/desk";
 import { useNow } from "@/hooks/useNow";
 import { EmptyState, SOURCE_META, timeAgo } from "@/components/common/shared";
+import { useDesk } from "@/providers/DeskProvider";
+import { DEFAULT_FILTERS } from "@/types/desk";
 import ChatAvatar from "./ChatAvatar";
-import { useChatColors } from "./chatTheme";
+import InboxFilterBar from "./InboxFilterBar";
+import { FootageMark } from "./footageMeta";
+import { pillSx as chatPillSx, useChatColors } from "./chatTheme";
 
 export type InboxTab = "review" | "approved" | "rejected" | "all";
 export type SourceFilter = Source | "all";
@@ -64,6 +68,8 @@ function stamp(iso: string, now: number) {
 export default function InboxList({ items, tab, onTab, source, onSource, query, onQuery, selectedId, onSelect }: InboxListProps) {
   const c = useChatColors();
   const now = useNow(30000);
+  const { filters, setFilters } = useDesk();
+  const filtered = filters.range !== "any" || !!filters.district;
   const [searchOpen, setSearchOpen] = useState(false);
   // A search with text in it stays open
   const searching = searchOpen || query !== "";
@@ -75,24 +81,7 @@ export default function InboxList({ items, tab, onTab, source, onSource, query, 
   const q = query.trim().toLowerCase();
   const visible = visibleItems(items, tab, source, query);
 
-  const pillSx = (active: boolean) => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 0.5,
-    height: 30,
-    px: 1.25,
-    border: 0,
-    borderRadius: "999px",
-    backgroundColor: active ? c.pill : c.bar,
-    color: active ? c.pillText : c.meta,
-    fontFamily: "inherit",
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    whiteSpace: "nowrap",
-    cursor: "pointer",
-    flexShrink: 0,
-    "&:hover": { filter: "brightness(0.97)" },
-  });
+  const pillSx = (active: boolean) => chatPillSx(c, active);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", minHeight: 0, height: "100%", backgroundColor: c.list }}>
@@ -139,6 +128,8 @@ export default function InboxList({ items, tab, onTab, source, onSource, query, 
           )}
         </Box>
 
+        <InboxFilterBar />
+
         <Box role="tablist" aria-label="Review status" sx={{ display: "flex", gap: 0.5, overflowX: "auto", scrollbarWidth: "none" }}>
           {TABS.map((t) => {
             const count = items.filter(TAB_MATCH[t.key]).length;
@@ -156,8 +147,15 @@ export default function InboxList({ items, tab, onTab, source, onSource, query, 
       <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {visible.length === 0 && (
           <EmptyState
-            title={q ? "Nothing matches that search" : tab === "review" ? "All caught up" : "Nothing here yet"}
-            hint={q ? "Try the sender's name or a word from the message." : tab === "review" ? "New WhatsApp messages and emails show up here." : "Stories move here once they are reviewed."}
+            title={q ? "Nothing matches that search" : filtered ? "Nothing in this time or district" : tab === "review" ? "All caught up" : "Nothing here yet"}
+            hint={q ? "Try the sender's name or a word from the message." : filtered ? "Widen the filter to see more." : tab === "review" ? "New WhatsApp messages and emails show up here." : "Stories move here once they are reviewed."}
+            action={
+              !q && filtered ? (
+                <Button variant="outlined" onClick={() => setFilters({ range: DEFAULT_FILTERS.range, district: null })} sx={{ borderColor: "divider", color: "text.primary" }}>
+                  Show any time, all districts
+                </Button>
+              ) : undefined
+            }
           />
         )}
         {visible.map((item) => {
@@ -201,6 +199,7 @@ export default function InboxList({ items, tab, onTab, source, onSource, query, 
                   <Typography sx={{ fontSize: "0.85rem", color: c.meta, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {item.draft.headline}
                   </Typography>
+                  <FootageMark footage={item.footage} />
                   {waiting && <Box component="span" aria-label="Waiting for review" sx={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: c.unread, flexShrink: 0 }} />}
                 </Box>
               </Box>

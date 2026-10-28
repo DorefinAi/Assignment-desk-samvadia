@@ -17,6 +17,8 @@ import ChatAvatar from "./ChatAvatar";
 import { EmailMessage, MAIL_INDENT, WhatsAppMessage } from "./OriginalMessage";
 import StoryEditor from "./StoryEditor";
 import RejectDialog from "./RejectDialog";
+import FootagePanel from "./FootagePanel";
+import FtpPickerDialog from "./FtpPickerDialog";
 import { useChatColors } from "./chatTheme";
 
 interface StoryReviewProps {
@@ -44,6 +46,7 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
   const c = useChatColors();
   const [rejecting, setRejecting] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [aiAnchor, setAiAnchor] = useState<HTMLElement | null>(null);
   const canReview = useCan("intake.review");
   const canRename = useCan("ftp.rename");
@@ -157,6 +160,17 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
             )}
             {item.stage === "published" && <Typography sx={noticeSx}>Sent to Octopus as {item.draft.slug}</Typography>}
             {email ? <EmailMessage item={item} onRetry={onRetry} /> : <WhatsAppMessage item={item} onRetry={onRetry} />}
+            {/* Footage on the FTP; only a build 1 backend sends it */}
+            {item.footage && (
+              <FootagePanel
+                item={item}
+                footage={item.footage}
+                meta={email ? c.mailMeta : c.meta}
+                onRecheck={canReview ? () => desk.recheckFootage(item.id) : undefined}
+                onPick={canReview ? () => setPicking(true) : undefined}
+                sx={email ? { ml: MAIL_INDENT, mt: 3, maxWidth: 928 } : { alignSelf: "flex-start", width: { xs: "95%", md: "85%", lg: "75%", xl: "65%" }, ml: 1 }}
+              />
+            )}
           </Box>
         </>
       )}
@@ -245,14 +259,15 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
         <RejectDialog
           headline={item.draft.headline}
           onClose={() => setRejecting(false)}
-          onReject={(reason) => {
-            desk.reject(item.id, reason);
+          onReject={(reason, note) => {
+            desk.reject(item.id, reason, note);
             setRejecting(false);
             onDecided?.();
           }}
         />
       )}
       {renaming && folder && <FolderDialog folder={folder} onClose={() => setRenaming(false)} />}
+      {picking && <FtpPickerDialog item={item} onClose={() => setPicking(false)} />}
       <Popover
         open={editing && !!aiAnchor}
         anchorEl={aiAnchor}
