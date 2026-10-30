@@ -5,7 +5,7 @@ import { ActivityEntry, DEFAULT_FILTERS, FeedEntry, FetchRun, FtpFolder, InboxFi
 import { matchesFilters } from "@/lib/ist";
 import { buildInitialState, DeskState, INCOMING, toIncomingItem } from "@/data/intakeData";
 import { buildSlug, dayOf, relocateSlug, slugError, uniqueSlug } from "@/lib/slug";
-import { assignableRoles, canManageUser, Role, ROLE_META } from "@/lib/rbac";
+import { Access, assignableRoles, canManageUser, Role, ROLE_META } from "@/lib/rbac";
 import { DeskUser, USERS } from "@/data/users";
 import { apiEnabled } from "@/lib/api";
 import { DeskContext, DeskContextValue, RefreshResult } from "./deskContext";
@@ -33,11 +33,12 @@ const patchItem = (s: DeskState, id: string, fn: (item: IntakeItem) => IntakeIte
 });
 
 /** The backend when NEXT_PUBLIC_API_URL is set; otherwise the sample data below. */
-export function DeskProvider(props: { reviewer: string; role: Role; children: ReactNode }) {
+export function DeskProvider(props: { reviewer: string; access: Access; children: ReactNode }) {
   return apiEnabled ? <ApiDeskProvider {...props} /> : <DemoDeskProvider {...props} />;
 }
 
-function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role: Role; children: ReactNode }) {
+function DemoDeskProvider({ reviewer, access, children }: { reviewer: string; access: Access; children: ReactNode }) {
+  const role = access.role;
   const [state, setState] = useState<DeskState>(buildInitialState);
   // Sample data has no kind, district or footage, so only the time filter does anything here
   const [filters, setFilterState] = useState<InboxFilters>(DEFAULT_FILTERS);
@@ -94,11 +95,11 @@ function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role
   const setUserRole = useCallback(
     (userId: string, next: Role) => {
       const target = users.find((u) => u.id === userId);
-      if (!target || !canManageUser(role, target.role) || !assignableRoles(role).includes(next)) return;
+      if (!target || !canManageUser(access, target.role) || !assignableRoles(role).includes(next)) return;
       setUsers((list) => list.map((u) => (u.id === userId ? { ...u, role: next } : u)));
       setState((s) => log(s, `Made ${target.name} ${ROLE_META[next].label.toLowerCase()}`));
     },
-    [role, users]
+    [access, role, users]
   );
 
   // WhatsApp media downloads
@@ -282,6 +283,7 @@ function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role
       items: shownItems,
       reviewer,
       role,
+      access,
       users,
       reporters: [],
       live: false,
@@ -309,7 +311,7 @@ function DemoDeskProvider({ reviewer, role, children }: { reviewer: string; role
       setFootage: async () => "The FTP needs the backend.",
       browseFtp: () => Promise.reject(new Error("The FTP needs the backend.")),
     }),
-    [state, shownItems, filters, setFilters, reviewer, role, users, setUserRole, refresh, updateDraft, resetSlug, applyAi, cycleAiHeadline, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive]
+    [state, shownItems, filters, setFilters, reviewer, role, access, users, setUserRole, refresh, updateDraft, resetSlug, applyAi, cycleAiHeadline, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive]
   );
 
   return <DeskContext.Provider value={value}>{children}</DeskContext.Provider>;

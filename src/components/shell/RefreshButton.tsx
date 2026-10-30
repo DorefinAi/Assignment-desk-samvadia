@@ -7,6 +7,7 @@ import { Alert, Box, Button, CircularProgress, Snackbar, Typography } from "@mui
 import { RefreshCw } from "lucide-react";
 import { RefreshResult, useDesk } from "@/providers/DeskProvider";
 import { useNow } from "@/hooks/useNow";
+import { useCan } from "@/hooks/useCan";
 import { headerButtonSx, timeAgo } from "@/components/common/shared";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -24,6 +25,9 @@ export default function RefreshButton() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ text: string; failed?: boolean } | null>(null);
   const last = runs[0]?.at;
+  // POST /desk/refresh needs desk.fetch
+  const canFetch = useCan("intake.fetch");
+  if (!canFetch) return null;
 
   const run = () => {
     setBusy(true);

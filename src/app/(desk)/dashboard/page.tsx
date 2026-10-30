@@ -8,7 +8,7 @@ import { Box, Button, Typography } from "@mui/material";
 import { ChevronRight, FolderTree, Inbox } from "lucide-react";
 import { useDesk } from "@/providers/DeskProvider";
 import { useNow } from "@/hooks/useNow";
-import { can, ROUTE_PERMISSION } from "@/lib/rbac";
+import { can, canOpen } from "@/lib/rbac";
 import { dayOf } from "@/lib/slug";
 import { OUTLOOK_MAILBOX, WHATSAPP_ACCOUNT } from "@/data/intakeData";
 import { IntakeItem, Source } from "@/types/desk";
@@ -31,9 +31,9 @@ const APPROVED = new Set(["filing", "filed", "published"]);
 const longDate = (day: string) => new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
 export default function DashboardPage() {
-  const { items, folders, activity, runs, role } = useDesk();
-  const showConnections = can(role, "dashboard.connections");
-  const showActivity = can(role, "dashboard.activity");
+  const { items, folders, activity, runs, access } = useDesk();
+  const showConnections = can(access, "dashboard.connections");
+  const showActivity = can(access, "dashboard.activity");
   const now = useNow(15000);
   const today = dayOf(new Date(now).toISOString());
   const [picked, setPicked] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export default function DashboardPage() {
   const daysWithIntake = new Set(items.map((i) => dayOf(i.receivedAt)));
   const foldersOnDay = folders.filter((f) => dayOf(f.createdAt) === day);
   const downloading = onDay.reduce((n, i) => n + i.attachments.filter((a) => a.state === "downloading").length, 0);
-  const opens = (href: string) => can(role, ROUTE_PERMISSION[href.split("?")[0]]);
+  const opens = (href: string) => canOpen(access, href.split("?")[0]);
 
   const fromSource = (source: Source) => onDay.filter((i) => i.source === source);
   const approvedNote = (list: IntakeItem[]) => `${list.filter((i) => APPROVED.has(i.stage)).length} approved`;

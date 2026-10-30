@@ -16,6 +16,18 @@ export function buildFeedXml(feedUrl: string, entries: FeedEntry[], items: Intak
     const folder = folders.find((f) => f.id === entry.folderId);
     if (!item || !folder) return "";
     const path = folderPath(folder.date, folder.locationCode, folder.slug);
+    // Without inbox access the text and files aren't sent to this browser; the real feed (built by the server) has them
+    if (item.partial)
+      return [
+        "    <item>",
+        `      <title>${esc(item.draft.headline)}</title>`,
+        `      <guid isPermaLink="false">${esc(folder.slug)}</guid>`,
+        "      <!-- Story text and files are left out here: open the story in Intake to see them -->",
+        `      <desk:slug>${esc(folder.slug)}</desk:slug>`,
+        `      <desk:folder>${esc(FTP_HOST + path)}</desk:folder>`,
+        `      <pubDate>${new Date(entry.publishedAt).toUTCString()}</pubDate>`,
+        "    </item>",
+      ].join("\n");
     const media = item.attachments
       .filter((a) => folder.attachmentIds.includes(a.id))
       .map((a, i) => `      <media:content url="${esc(FTP_HOST + path + filedName(folder.slug, i, a.fileName, a.kind))}" medium="${a.kind}" />`);

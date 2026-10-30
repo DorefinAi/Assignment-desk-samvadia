@@ -11,11 +11,13 @@ import { FTP_HOST } from "@/lib/rss";
 import { EmptyState, formatStamp, KIND_ICON, listFrameSx, MONO, PriorityTag } from "@/components/common/shared";
 import FolderDialog from "@/components/ftp/FolderDialog";
 import { useCan } from "@/hooks/useCan";
+import { canOpen } from "@/lib/rbac";
 
 type Filter = { date: string; location?: string } | null;
 
 export default function FtpPage() {
-  const { folders, items, feed } = useDesk();
+  const { folders, items, feed, access } = useDesk();
+  const canOpenInbox = canOpen(access, "/inbox");
   const canRename = useCan("ftp.rename");
   const [filter, setFilter] = useState<Filter>(null);
   const [query, setQuery] = useState("");
@@ -123,7 +125,7 @@ export default function FtpPage() {
                     </Box>
                     <Box sx={{ display: { xs: "none", sm: "block" }, textAlign: "right", flexShrink: 0, mr: 1 }}>
                       <Typography sx={{ fontSize: "0.75rem" }}>
-                        {files.length + 1} files · {locationName(folder.locationCode)}
+                        {item?.partial ? locationName(folder.locationCode) : `${files.length + 1} files · ${locationName(folder.locationCode)}`}
                       </Typography>
                       <Typography sx={{ fontSize: "0.6875rem", color: "text.secondary" }}>
                         {folder.updatedAt ? `Changed ${formatStamp(folder.updatedAt)}` : `Created ${formatStamp(folder.createdAt)}`}
@@ -142,12 +144,17 @@ export default function FtpPage() {
                       <Typography sx={{ fontFamily: MONO, fontSize: "0.6875rem", color: "text.secondary", mb: 0.75, wordBreak: "break-all" }}>{folderPath(folder.date, folder.locationCode, folder.slug)}</Typography>
                       <Box sx={{ borderRadius: "8px", border: "1px solid", borderColor: "divider" }}>
                         <FileRow icon={<KIND_ICON.document size={14} />} name={`${folder.slug}.txt`} size="2 KB" note="headline and story text" />
+                        {item?.partial && (
+                          <Typography sx={{ px: 1.5, py: 1, borderTop: "1px solid", borderColor: "divider", fontSize: "0.75rem", color: "text.secondary" }}>
+                            {canOpenInbox ? "Open the story in intake to see its footage and photos." : "The footage and photo list is shown only to people who can open Intake."}
+                          </Typography>
+                        )}
                         {files.map((a, i) => {
                           const Icon = KIND_ICON[a.kind];
                           return <FileRow key={a.id} icon={<Icon size={14} />} name={filedName(folder.slug, i, a.fileName, a.kind)} size={`${a.sizeMb.toFixed(1)} MB`} note={`from ${a.fileName}`} />;
                         })}
                       </Box>
-                      {item && (
+                      {item && canOpenInbox && (
                         <Button component={Link} href={`/inbox?item=${item.id}`} size="small" startIcon={<Inbox size={14} />} sx={{ mt: 1, color: "text.primary" }}>
                           Open story in intake
                         </Button>

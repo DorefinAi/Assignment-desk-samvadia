@@ -85,6 +85,8 @@ export interface IntakeItem {
   reporterId?: string;
   /** Backend only: shadow-mode item; the AI suggestions stay hidden for it */
   blind?: boolean;
+  /** The backend left out the story text, files and messages (only sent to people who can open the inbox) */
+  partial?: boolean;
   /** Build 1 backend only. Each is missing on an older backend, and the UI piece that shows it stays hidden. */
   reporterSlug?: string | null;
   parsed?: ParsedSlug | null;

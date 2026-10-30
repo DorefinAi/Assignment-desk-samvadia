@@ -4,20 +4,27 @@ import React from "react";
 import { Box, MenuItem, TextField, Typography } from "@mui/material";
 import { Check, Minus } from "lucide-react";
 import { useDesk } from "@/providers/DeskProvider";
-import { assignableRoles, canManageUser, Permission, PERMISSIONS, Role, ROLE_META, ROLES } from "@/lib/rbac";
+import { can, canManageUser, Permission, PERMISSIONS, Role, ROLE_META, ROLES } from "@/lib/rbac";
 import { Panel } from "@/components/common/shared";
 
 const PERMISSION_KEYS = Object.keys(PERMISSIONS) as Permission[];
 
 export default function AccessPage() {
-  const { users, role, reviewer, setUserRole } = useDesk();
-  const options = assignableRoles(role);
+  const { users, role, access, reviewer, setUserRole } = useDesk();
+  // From /me with the backend (assignable_roles); the role's own rule on demo data
+  const options = access.assignable;
+  const canManage = can(access, "access.manage");
 
   return (
     <Box sx={{ px: { xs: 2, md: 3 }, py: 2.5, maxWidth: 1280, mx: "auto", display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 0.9fr) minmax(0, 1.1fr)" }, gap: 2, alignItems: "start" }}>
-      <Panel title="People" hint={role === "super_admin" ? "You can give anyone any role." : "You can change roles for people below admin."}>
+      <Panel title="People" hint={!canManage ? undefined : role === "super_admin" ? "You can give anyone any role." : "You can change roles for people below admin."}>
+        {!canManage && (
+          <Typography sx={{ px: 2, py: 2, fontSize: "0.8125rem", color: "text.secondary" }}>
+            Your account can see how roles work, but not the list of people or their roles. Ask an admin if you need to manage users.
+          </Typography>
+        )}
         {users.map((user, i) => {
-          const editable = canManageUser(role, user.role);
+          const editable = canManageUser(access, user.role);
           const isYou = user.username === reviewer;
           return (
             <Box key={user.id} sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 2, py: 1.25, borderTop: i ? "1px solid" : "none", borderColor: "divider" }}>
@@ -57,7 +64,7 @@ export default function AccessPage() {
         })}
       </Panel>
 
-      <Panel title="What each role can do" hint="Roles go from most access (left) to least. Your role is highlighted.">
+      <Panel title="What each role can do" hint="Defaults for each role, from most access (left) to least. Your role is highlighted. An owner can switch single pages or actions on or off for one person.">
         <Box sx={{ overflowX: "auto" }}>
           <Box component="table" sx={{ width: "100%", minWidth: 520, borderCollapse: "collapse", fontSize: "0.75rem", "& th, & td": { px: 1.5, py: 1, borderTop: "1px solid", borderColor: "divider", textAlign: "center" }, "& th:first-of-type, & td:first-of-type": { textAlign: "left" } }}>
             <thead>

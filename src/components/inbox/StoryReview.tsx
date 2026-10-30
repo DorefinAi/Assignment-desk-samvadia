@@ -52,6 +52,7 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
   const canRename = useCan("ftp.rename");
   const canManageFeed = useCan("feed.manage");
   const canSeeFtp = useCan("ftp.view");
+  const canPickFootage = useCan("intake.footage");
 
   const folder = desk.folders.find((f) => f.id === item.folderId);
   const entry = desk.feed.find((e) => e.itemId === item.id);
@@ -167,7 +168,7 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
                 footage={item.footage}
                 meta={email ? c.mailMeta : c.meta}
                 onRecheck={canReview ? () => desk.recheckFootage(item.id) : undefined}
-                onPick={canReview ? () => setPicking(true) : undefined}
+                onPick={canPickFootage ? () => setPicking(true) : undefined}
                 sx={email ? { ml: MAIL_INDENT, mt: 3, maxWidth: 928 } : { alignSelf: "flex-start", width: { xs: "95%", md: "85%", lg: "75%", xl: "65%" }, ml: 1 }}
               />
             )}

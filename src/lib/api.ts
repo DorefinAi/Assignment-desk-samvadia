@@ -2,7 +2,7 @@
 
 // Talks to the Vartmaan backend. With NEXT_PUBLIC_API_URL unset the desk runs on its demo data,
 // as before; set it (e.g. http://localhost:8000 for `python -m app.devstack`) to use the real API.
-import { clearSession, readSession } from "./auth";
+import { clearSession, readSession, refreshMe } from "./auth";
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
 export const apiEnabled = API_URL !== "";
@@ -37,7 +37,15 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   if (!res.ok) {
     // The session ended on the server (expired or logged out elsewhere): back to the sign-in page
     if (res.status === 401) clearSession();
+    // Their pages or actions changed mid-session: re-read /me so the nav, page guard and buttons catch up
+    if (res.status === 403) void refreshMe();
     throw new ApiError(res.status, await errorMessage(res));
   }
   return res.json() as Promise<T>;
 }
+
+/** Shown when the backend refuses something because this person's access changed. */
+export const ACCESS_CHANGED = "Your access has changed, so the desk could not do that. The pages and buttons now show what you can use.";
+
+/** A 403: refused for lack of permission, not because something went wrong */
+export const isForbidden = (err: unknown) => err instanceof ApiError && err.status === 403;

@@ -4,7 +4,7 @@
 // and the backend one (NEXT_PUBLIC_API_URL set). Screens never know which one they have.
 import { createContext, useContext } from "react";
 import { ActivityEntry, District, FeedEntry, FetchRun, FtpFolder, FtpListing, InboxFilters, IntakeItem, KindCounts, StoryDraft } from "@/types/desk";
-import { Role } from "@/lib/rbac";
+import { Access, Role } from "@/lib/rbac";
 import { DeskUser } from "@/data/users";
 
 /** What one click on Refresh brought in */
@@ -31,6 +31,8 @@ export interface DeskContextValue {
   activity: ActivityEntry[];
   reviewer: string;
   role: Role;
+  /** What the signed-in person may open and do (from /me with the backend, role defaults on demo data) */
+  access: Access;
   users: DeskUser[];
   /** Reporters for the picker; empty on demo data */
   reporters: ReporterOption[];

@@ -10,7 +10,7 @@ import { ChevronsLeft, ChevronsRight, FolderTree, Inbox, LayoutDashboard, LogOut
 import NavigationLabel from "./NavigationLabel";
 import VartamaanMark from "./VartamaanMark";
 import { useDesk } from "@/providers/DeskProvider";
-import { can, ROUTE_PERMISSION } from "@/lib/rbac";
+import { canOpen } from "@/lib/rbac";
 
 const COLLAPSED_WIDTH = 64;
 const EXPANDED_WIDTH = 224;
@@ -21,7 +21,7 @@ export default function LeftNavigation({ onLogout }: { onLogout: () => void }) {
   const isMobile = useMediaQuery(theme.breakpoints.down("lg"));
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const { items, role } = useDesk();
+  const { items, access } = useDesk();
 
   useEffect(() => {
     try {
@@ -50,7 +50,7 @@ export default function LeftNavigation({ onLogout }: { onLogout: () => void }) {
     { label: "FTP folders", icon: <FolderTree />, path: "/ftp" },
     { label: "RSS feed", icon: <Rss />, path: "/feed" },
     { label: "Users and roles", icon: <ShieldCheck />, path: "/access" },
-  ].filter((item) => can(role, ROUTE_PERMISSION[item.path]));
+  ].filter((item) => canOpen(access, item.path));
 
   const narrow = collapsed && !isMobile;
 

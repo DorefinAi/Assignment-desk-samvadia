@@ -4,8 +4,8 @@
 import React from "react";
 import { usePathname } from "next/navigation";
 import { Box, Typography } from "@mui/material";
-import { Session } from "@/lib/auth";
-import { can, ROUTE_PERMISSION } from "@/lib/rbac";
+import { canOpen } from "@/lib/rbac";
+import { useDesk } from "@/providers/DeskProvider";
 
 const HINTS: Record<string, string> = {
   "/dashboard": "WhatsApp and Outlook intake for one day, and who sent the news.",
@@ -15,10 +15,11 @@ const HINTS: Record<string, string> = {
   "/access": "Who can see and change what on the assignment desk.",
 };
 
-export default function DeskHeader({ session }: { session: Session }) {
+export default function DeskHeader() {
   const pathname = usePathname();
-  // A page this role cannot open does not describe itself
-  const hint = !ROUTE_PERMISSION[pathname] || can(session.role, ROUTE_PERMISSION[pathname]) ? HINTS[pathname] : undefined;
+  const { access } = useDesk();
+  // A page this person cannot open does not describe itself
+  const hint = canOpen(access, pathname) ? HINTS[pathname] : undefined;
   if (!hint) return null;
 
   return (

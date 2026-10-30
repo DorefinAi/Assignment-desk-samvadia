@@ -11,11 +11,11 @@ import VartamaanMark from "./VartamaanMark";
 import { useDesk } from "@/providers/DeskProvider";
 import { useThemeMode } from "@/providers/MuiProvider";
 import { Session } from "@/lib/auth";
-import { can, ROLE_META, ROUTE_PERMISSION } from "@/lib/rbac";
+import { canOpen, homePage, ROLE_META } from "@/lib/rbac";
 
 export default function TopBar({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const pathname = usePathname();
-  const { items, role } = useDesk();
+  const { items, access } = useDesk();
   const { mode, toggleTheme } = useThemeMode();
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
 
@@ -27,7 +27,9 @@ export default function TopBar({ session, onLogout }: { session: Session; onLogo
     { label: "RSS feed", Icon: Rss, path: "/feed" },
     { label: "Reporters", Icon: Contact, path: "/reporters" },
     { label: "Users and roles", Icon: ShieldCheck, path: "/access" },
-  ].filter((t) => can(role, ROUTE_PERMISSION[t.path]));
+  ].filter((t) => canOpen(access, t.path));
+  // The mark goes to the first page this person may open, which is not always the overview
+  const home = homePage(access) ?? "/dashboard";
 
   const iconButtonSx = { width: 36, height: 36, borderRadius: "10px", color: "text.secondary", "&:hover": { color: "text.primary", backgroundColor: "action.hover" } };
 
@@ -36,7 +38,7 @@ export default function TopBar({ session, onLogout }: { session: Session; onLogo
       component="header"
       sx={{ flexShrink: 0, display: "flex", alignItems: "center", gap: { xs: 1, md: 2 }, height: 56, px: { xs: 1.5, md: 2.5 }, backgroundColor: "background.paper", borderBottom: "1px solid", borderColor: "divider" }}
     >
-      <Box component={Link} href="/dashboard" aria-label="Samvadia assignment desk, overview" sx={{ display: "flex", alignItems: "center", gap: 1.25, color: "text.primary", textDecoration: "none", flexShrink: 0 }}>
+      <Box component={Link} href={home} aria-label="Samvadia assignment desk, home" sx={{ display: "flex", alignItems: "center", gap: 1.25, color: "text.primary", textDecoration: "none", flexShrink: 0 }}>
         <VartamaanMark size={22} />
         <Box sx={{ display: { xs: "none", lg: "flex" }, alignItems: "baseline", gap: 1, whiteSpace: "nowrap" }}>
           <Typography component="span" sx={{ fontSize: "1rem", fontWeight: 600, letterSpacing: "-0.03em" }}>

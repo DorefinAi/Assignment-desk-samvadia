@@ -221,5 +221,13 @@ export function toIntakeItem(item: ApiItem): IntakeItem {
     district: toDistrict(item.district),
     kind: ITEM_KINDS.includes(item.kind as ItemKind) ? (item.kind as ItemKind) : undefined,
     footage: toFootage(item.footage),
+    partial: item.body === undefined || item.media === undefined,
   };
+}
+
+/** A write response or list row without body/media/messages (caller can't open the inbox) must not wipe
+ *  what is already known about the story: keep the earlier copy's values for whatever was left out. */
+export function keepDetail(next: ApiItem, prev: ApiItem | undefined): ApiItem {
+  if (!prev) return next;
+  return { ...next, body: next.body ?? prev.body, media: next.media ?? prev.media, messages: next.messages ?? prev.messages };
 }

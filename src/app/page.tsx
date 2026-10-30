@@ -4,10 +4,10 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 import { Inbox, FolderTree, Rss } from "lucide-react";
-import { signIn, signInWithApi, useSession } from "@/lib/auth";
+import { accessOf, signIn, signInWithApi, useSession } from "@/lib/auth";
 import { API_URL, apiEnabled } from "@/lib/api";
 import VartamaanMark from "@/components/shell/VartamaanMark";
-import { Role, ROLE_META, ROLES } from "@/lib/rbac";
+import { homePage, Role, ROLE_META, ROLES } from "@/lib/rbac";
 
 const FLOW = [
   { Icon: Inbox, text: "WhatsApp and Outlook in one inbox" },
@@ -26,7 +26,10 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (session) router.replace("/dashboard");
+    // First page this account may open (not everyone has the overview); the desk explains if there is none
+    if (!session) return;
+    const access = accessOf(session);
+    router.replace((access && homePage(access)) ?? "/dashboard");
   }, [session, router]);
 
   const handleSubmit = async (e: FormEvent) => {
