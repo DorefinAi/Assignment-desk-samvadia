@@ -1,6 +1,6 @@
 "use client";
 
-// The list filters under the source pills: what kind of item, when it arrived (IST), and which district.
+// The list filters (in the intake bar, its "Filters" popover, or under the source pills on a phone): what kind of item, when it arrived (IST), and which district.
 // The kind and district pills only appear when the backend supports them (kind_counts, GET /desk/districts).
 // Default is every time, so the list never looks empty just because the day changed.
 import React, { useState } from "react";
@@ -18,7 +18,8 @@ type Open = "kind" | "range" | "custom" | "district" | null;
 const menuPaper = { paper: { sx: { mt: 0.5, minWidth: 200 } } };
 const tick = (on: boolean) => <ListItemIcon sx={{ minWidth: "26px !important" }}>{on ? <Check size={15} /> : null}</ListItemIcon>;
 
-export default function InboxFilterBar() {
+/** stacked: one filter per line, for the "Filters" popover */
+export default function InboxFilterBar({ stacked = false }: { stacked?: boolean }) {
   const { filters, setFilters, kindCounts, districts } = useDesk();
   const c = useChatColors();
   const [open, setOpen] = useState<Open>(null);
@@ -59,7 +60,7 @@ export default function InboxFilterBar() {
   const caret = <ChevronDown size={13} aria-hidden />;
 
   return (
-    <Box role="group" aria-label="List filters" sx={{ display: "flex", gap: 0.75, overflowX: "auto", scrollbarWidth: "none" }}>
+    <Box role="group" aria-label="List filters" sx={stacked ? { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 } : { display: "flex", gap: 0.75, flexShrink: 0, overflowX: "auto", scrollbarWidth: "none" }}>
       {kindCounts && (
         <Box component="button" onClick={show("kind")} aria-haspopup="menu" aria-expanded={open === "kind"} aria-label={`Showing ${KIND_LABEL[filters.kind]}, change`} sx={pillSx(c, filters.kind !== "story")}>
           {KIND_LABEL[filters.kind]}

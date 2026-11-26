@@ -1,6 +1,7 @@
 "use client";
 
 // One line under the top bar saying what the page is for. The page's name is the active tab above it.
+// Intake has no line: its filter bar (InboxToolbar) takes this place.
 import React from "react";
 import { usePathname } from "next/navigation";
 import { Box, Typography } from "@mui/material";
@@ -9,7 +10,6 @@ import { useDesk } from "@/providers/DeskProvider";
 
 const HINTS: Record<string, string> = {
   "/dashboard": "WhatsApp and Outlook intake for one day, and who sent the news.",
-  "/inbox": "Review each message, edit the story, then approve it into the Octopus.",
   "/ftp": "One folder per approved story. Rename the slug or move it to another location.",
   "/feed": "What Octopus reads. Each approved story is one entry.",
   "/access": "Who can see and change what on the assignment desk.",

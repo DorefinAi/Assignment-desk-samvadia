@@ -1,25 +1,28 @@
 "use client";
 
-// One conversation, laid out like the app it came from: a header bar, the message (a WhatsApp
-// bubble or an Outlook email) and a bar with the decision. "Edit story" swaps the message for
+// One conversation as a chat: a header bar (who, where, and what the story holds), the story's messages
+// (WhatsApp or an email thread, see ThreadView) and a bar with the decision. "Edit story" swaps the message for
 // the Story editor, so the screen stays two panes: the list and whichever one you are working in.
 import React, { useState } from "react";
 import Link from "next/link";
 import { Badge, Box, Button, CircularProgress, IconButton, Popover, SxProps, Theme, Tooltip, Typography } from "@mui/material";
-import { ArrowLeft, Check, FolderTree, Pencil, RotateCcw, Rss, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Check, FolderTree, MapPin, Pencil, RotateCcw, Rss, Sparkles, X } from "lucide-react";
 import { useDesk } from "@/providers/DeskProvider";
 import { useCan } from "@/hooks/useCan";
 import { IntakeItem } from "@/types/desk";
 import { slugError } from "@/lib/slug";
+import { SOURCE_META } from "@/components/common/shared";
 import FolderDialog from "@/components/ftp/FolderDialog";
 import AiPanel from "./AiPanel";
 import ChatAvatar from "./ChatAvatar";
-import { EmailMessage, MAIL_INDENT, WhatsAppMessage } from "./OriginalMessage";
+import ThreadView, { BUBBLE_MAX } from "./ThreadView";
 import StoryEditor from "./StoryEditor";
 import RejectDialog from "./RejectDialog";
 import FootagePanel from "./FootagePanel";
 import FtpPickerDialog from "./FtpPickerDialog";
+import StoryMeta from "./StoryMeta";
 import { useChatColors } from "./chatTheme";
+import { plural, threadCounts } from "./threadModel";
 
 interface StoryReviewProps {
   item: IntakeItem;
@@ -31,16 +34,6 @@ interface StoryReviewProps {
   onDecided?: () => void;
 }
 
-/** "TODAY", "YESTERDAY" or "17 OCT 2026", for the date tag above the message */
-function dayPill(iso: string) {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-}
-
 export default function StoryReview({ item, onBack, editing, onEditing, onDecided }: StoryReviewProps) {
   const desk = useDesk();
   const c = useChatColors();
@@ -48,6 +41,8 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
   const [renaming, setRenaming] = useState(false);
   const [picking, setPicking] = useState(false);
   const [aiAnchor, setAiAnchor] = useState<HTMLElement | null>(null);
+  // The media viewer covers this pane
+  const [pane, setPane] = useState<HTMLElement | null>(null);
   const canReview = useCan("intake.review");
   const canRename = useCan("ftp.rename");
   const canManageFeed = useCan("feed.manage");
@@ -62,49 +57,93 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
   const busy = item.stage === "filing" || item.stage === "filed";
   const email = item.source === "outlook";
 
-  // WhatsApp Web's date tag and its yellow notice strip; an email shows the same notices as a Gmail-style banner
-  const dateTagSx: SxProps<Theme> = { alignSelf: "center", px: 1.25, py: 0.875, borderRadius: "5px", backgroundColor: c.dateTag, color: c.dateTagText, fontSize: "0.75rem", fontWeight: 500, textTransform: "uppercase", boxShadow: "0 1px 0.5px rgba(11, 20, 26, 0.13)" };
-  const noticeSx: SxProps<Theme> = email
-    ? { px: 2, py: 1.25, mb: 2, borderRadius: "8px", backgroundColor: c.mailTile, fontSize: "0.8125rem", ml: MAIL_INDENT }
-    : { alignSelf: "center", maxWidth: 560, px: 1.25, py: 0.625, borderRadius: "5px", backgroundColor: c.notice, color: c.noticeText, fontSize: "0.77rem", lineHeight: "20px", textAlign: "center" };
-  const note = { fontSize: "0.75rem", color: email ? c.mailMeta : c.meta };
-  const quietButtonSx = { borderColor: "divider", color: "text.primary", backgroundColor: email ? "transparent" : c.bubble };
+  const counts = threadCounts(item);
+
+  // WhatsApp Web's yellow notice strip, for both sources
+  const noticeSx: SxProps<Theme> = { alignSelf: "center", maxWidth: 560, px: 1.25, py: 0.625, borderRadius: "5px", backgroundColor: c.notice, color: c.noticeText, fontSize: "0.77rem", lineHeight: "20px", textAlign: "center" };
+  const note = { fontSize: "0.75rem", color: c.meta };
+  const quietButtonSx = { borderColor: "divider", color: "text.primary", backgroundColor: c.bubble };
+  // Header: the email's subject, or the sender and their role; then contact, district and source once
+  // for the whole story (the bubbles don't repeat them), and on the right what the story holds
+  const title = email ? item.subject || item.sender.name : `${item.sender.name} · ${item.sender.role}`;
+  const contact = email ? `${item.sender.name}${item.sender.contact ? ` <${item.sender.contact}>` : ""}` : item.sender.contact;
+  const sourceLabel = email ? (counts.messages > 1 ? "Email thread" : "Email") : SOURCE_META[item.source].label;
+  const chips = [
+    counts.messages > 0 && plural(counts.messages, email ? "email" : "message"),
+    counts.photos > 0 && plural(counts.photos, "photo"),
+    counts.videos > 0 && plural(counts.videos, "video"),
+    counts.files > 0 && plural(counts.files, "file"),
+  ].filter((x): x is string => !!x);
+  const metaSx = { fontSize: "0.78125rem", color: c.meta, whiteSpace: "nowrap", flexShrink: 0 } as const;
   const onRetry = canReview ? (id: string) => desk.retryDownload(item.id, id) : undefined;
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, minWidth: 0 }}>
-      {/* Conversation header. An email already names its sender, so on wide screens it has none, except while editing. */}
-      {(!email || editing) && (
-        <Box sx={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 1.5, height: 60, px: 2, backgroundColor: c.bar, borderBottom: "1px solid", borderColor: c.line }}>
-          {onBack && (
-            <IconButton onClick={onBack} aria-label="Back to intake" sx={{ ml: -1 }}>
-              <ArrowLeft size={18} />
-            </IconButton>
-          )}
-          <ChatAvatar item={item} size={40} />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography noWrap sx={{ fontSize: "0.9375rem", fontWeight: 600 }}>{editing ? "Story" : (item.chat ?? item.sender.name)}</Typography>
-            <Typography noWrap sx={note}>{editing ? `From ${item.sender.name}` : item.chat ? `${item.sender.name}, ${item.sender.contact}` : item.sender.contact}</Typography>
-          </Box>
-          {editing && (
-            <>
-              {/* AI suggestions for the story; a dot when the model flagged something (duplicate, check before air) */}
-              {item.ai.headlines.length > 0 && !item.blind && (
-              <Tooltip title="AI suggestions">
-                <IconButton onClick={(e) => setAiAnchor(e.currentTarget)} aria-label="AI suggestions" aria-haspopup="dialog" aria-expanded={!!aiAnchor} sx={{ color: "text.primary" }}>
-                  <Badge variant="dot" color="warning" invisible={item.ai.flags.length === 0} overlap="circular">
-                    <Sparkles size={18} />
-                  </Badge>
-                </IconButton>
-              </Tooltip>
+    <Box ref={setPane} sx={{ position: "relative", display: "flex", flexDirection: "column", height: "100%", minHeight: 0, minWidth: 0 }}>
+      {/* Conversation header */}
+      <Box component="header" sx={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 1.5, minHeight: 60, px: 2, py: 1, backgroundColor: c.bar, borderBottom: "1px solid", borderColor: c.line }}>
+        {onBack && (
+          <IconButton onClick={onBack} aria-label="Back to intake" sx={{ ml: -1 }}>
+            <ArrowLeft size={18} />
+          </IconButton>
+        )}
+        <ChatAvatar item={item} size={40} />
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography component="h2" noWrap title={editing ? undefined : title} sx={{ fontSize: "0.9375rem", fontWeight: 600, lineHeight: 1.5 }}>
+            {editing ? "Story" : title}
+          </Typography>
+          {editing ? (
+            <Typography noWrap sx={note}>From {item.sender.name}</Typography>
+          ) : (
+            <Box sx={{ display: "flex", alignItems: "center", columnGap: 1.5, minWidth: 0, overflow: "hidden", lineHeight: 1.5 }}>
+              {contact && (
+                <Typography noWrap title={contact} sx={{ ...metaSx, flexShrink: 1, minWidth: 0 }}>
+                  {contact}
+                </Typography>
               )}
-              <IconButton onClick={() => onEditing(false)} aria-label="Close story" sx={{ color: c.meta, mr: -1 }}>
-                <X size={18} />
-              </IconButton>
-            </>
+              {item.district && (
+                <Typography title={item.district.nameHi ?? undefined} sx={{ ...metaSx, display: "inline-flex", alignItems: "center", gap: 0.375 }}>
+                  <MapPin size={12} aria-hidden />
+                  {item.district.name} ({item.district.code})
+                </Typography>
+              )}
+              {item.chat && (
+                <Typography noWrap title={item.chat} sx={{ ...metaSx, flexShrink: 1, minWidth: 0 }}>
+                  {item.chat}
+                </Typography>
+              )}
+              {/* Phones: the avatar's badge already shows the source */}
+              <Typography sx={{ ...metaSx, display: { xs: "none", sm: "block" } }}>{sourceLabel}</Typography>
+              <StoryMeta item={item} color={c.meta} withDistrict={false} sx={{ flexWrap: "nowrap", flexShrink: 0 }} />
+            </Box>
           )}
         </Box>
-      )}
+        {!editing && chips.length > 0 && (
+          <Box component="ul" aria-label="In this story" sx={{ display: { xs: "none", sm: "flex" }, gap: 0.75, m: 0, p: 0, listStyle: "none", flexShrink: 0 }}>
+            {chips.map((chip) => (
+              <Box component="li" key={chip} sx={{ px: 1.25, height: 26, display: "inline-flex", alignItems: "center", borderRadius: "13px", border: "1px solid", borderColor: c.line, backgroundColor: c.bubble, color: "text.primary", fontSize: "0.75rem", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                {chip}
+              </Box>
+            ))}
+          </Box>
+        )}
+        {editing && (
+          <>
+            {/* AI suggestions for the story; a dot when the model flagged something (duplicate, check before air) */}
+            {item.ai.headlines.length > 0 && !item.blind && (
+            <Tooltip title="AI suggestions">
+              <IconButton onClick={(e) => setAiAnchor(e.currentTarget)} aria-label="AI suggestions" aria-haspopup="dialog" aria-expanded={!!aiAnchor} sx={{ color: "text.primary" }}>
+                <Badge variant="dot" color="warning" invisible={item.ai.flags.length === 0} overlap="circular">
+                  <Sparkles size={18} />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+            )}
+            <IconButton onClick={() => onEditing(false)} aria-label="Close story" sx={{ color: c.meta, mr: -1 }}>
+              <X size={18} />
+            </IconButton>
+          </>
+        )}
+      </Box>
 
       {editing ? (
         // Every field of the story, in place of the message
@@ -127,49 +166,41 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
         </Box>
       ) : (
         <>
-          {/* Phones only: the way back to the list */}
-          {email && onBack && (
-            <Box sx={{ flexShrink: 0, display: "flex", alignItems: "center", height: 48, px: 1, backgroundColor: c.mail, borderBottom: "1px solid", borderColor: "divider" }}>
-              <IconButton onClick={onBack} aria-label="Back to intake">
-                <ArrowLeft size={18} />
-              </IconButton>
-            </Box>
-          )}
-
-          {/* The message: a WhatsApp chat wall, or a Gmail reading pane */}
+          {/* The story's messages on the chat wall, oldest first; the decision notices come after them */}
           <Box
             component="section"
-            aria-label={email ? "Email" : "Message"}
+            aria-label={email ? "Email thread" : "Messages"}
             sx={{
               flex: 1,
               minHeight: 0,
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
-              gap: email ? 0 : 1.5,
-              px: email ? { xs: 2, sm: 3 } : { xs: 1.5, sm: 2, md: "5%" },
-              py: email ? 3 : 2.5,
-              backgroundColor: email ? c.mail : c.wall,
-              ...(email ? {} : { backgroundImage: `radial-gradient(${c.wallDots} 1px, transparent 1px)`, backgroundSize: "18px 18px" }),
+              // Groups, date dividers and desk notes are 12px apart; bubbles inside a group 3px
+              gap: 1.5,
+              px: { xs: 1.5, sm: 2, md: "4%" },
+              py: 2,
+              backgroundColor: c.wall,
+              backgroundImage: `radial-gradient(${c.wallDots} 1px, transparent 1px)`,
+              backgroundSize: "18px 18px",
             }}
           >
-            {!email && <Typography sx={dateTagSx}>{dayPill(item.receivedAt)}</Typography>}
+            <ThreadView key={item.id} item={item} onRetry={onRetry} viewerContainer={pane} />
             {item.stage === "rejected" && item.rejectReason && (
               <Typography sx={noticeSx}>
                 {item.reviewedBy ? `Rejected by ${item.reviewedBy}` : "Rejected"}: {item.rejectReason}
               </Typography>
             )}
             {item.stage === "published" && <Typography sx={noticeSx}>Sent to Octopus as {item.draft.slug}</Typography>}
-            {email ? <EmailMessage item={item} onRetry={onRetry} /> : <WhatsAppMessage item={item} onRetry={onRetry} />}
             {/* Footage on the FTP; only a build 1 backend sends it */}
             {item.footage && (
               <FootagePanel
                 item={item}
                 footage={item.footage}
-                meta={email ? c.mailMeta : c.meta}
+                meta={c.meta}
                 onRecheck={canReview ? () => desk.recheckFootage(item.id) : undefined}
                 onPick={canPickFootage ? () => setPicking(true) : undefined}
-                sx={email ? { ml: MAIL_INDENT, mt: 3, maxWidth: 928 } : { alignSelf: "flex-start", width: { xs: "95%", md: "85%", lg: "75%", xl: "65%" }, ml: 1 }}
+                sx={{ alignSelf: "flex-start", width: BUBBLE_MAX, ml: 1 }}
               />
             )}
           </Box>
@@ -188,10 +219,9 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
           minHeight: 62,
           px: 2,
           py: 1,
-          backgroundColor: email && !editing ? c.mail : c.bar,
+          backgroundColor: c.bar,
           borderTop: "1px solid",
-          borderColor: email && !editing ? "divider" : c.line,
-          ...(email && !editing ? { "& .MuiButton-root": { borderRadius: "999px" } } : {}),
+          borderColor: c.line,
         }}
       >
         <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
@@ -218,7 +248,7 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
           </Button>
           {canReview && item.stage === "new" && (
             <>
-              <Button variant="outlined" color="error" onClick={() => setRejecting(true)} startIcon={<X size={15} />} sx={{ backgroundColor: email ? "transparent" : c.bubble }}>
+              <Button variant="outlined" color="error" onClick={() => setRejecting(true)} startIcon={<X size={15} />} sx={{ backgroundColor: c.bubble }}>
                 Reject
               </Button>
               <Button

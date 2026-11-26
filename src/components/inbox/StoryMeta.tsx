@@ -14,13 +14,21 @@ const KIND_ONE: Record<ItemKind, string> = { story: "Story", press_release: "Pre
 
 const tagSx = { px: 0.75, lineHeight: "18px", fontSize: "0.6875rem", fontWeight: 700, borderRadius: "4px", border: "1px solid", borderColor: "text.primary", color: "text.primary", whiteSpace: "nowrap" } as const;
 
-/** True when there is anything for StoryMeta to show */
-export const hasStoryMeta = (item: IntakeItem) => !!(item.reporterSlug || item.parsed?.type || item.district || (item.kind && item.kind !== "story"));
 
-export default function StoryMeta({ item, color, sx }: { item: IntakeItem; /** Secondary text colour of the surface it sits on */ color: string; sx?: object }) {
+interface StoryMetaProps {
+  item: IntakeItem;
+  /** Secondary text colour of the surface it sits on */
+  color: string;
+  /** Leave the district out where it is already shown */
+  withDistrict?: boolean;
+  sx?: object;
+}
+
+export default function StoryMeta({ item, color, withDistrict = true, sx }: StoryMetaProps) {
   const type = item.parsed?.type;
   const nonStory = item.kind && item.kind !== "story";
-  if (!hasStoryMeta(item)) return null;
+  const district = withDistrict ? item.district : null;
+  if (!(item.reporterSlug || type || nonStory || district)) return null;
   return (
     <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.25, rowGap: 0.5, ...sx }}>
       {item.reporterSlug && (
@@ -34,11 +42,11 @@ export default function StoryMeta({ item, color, sx }: { item: IntakeItem; /** S
         </Box>
       )}
       {nonStory && <Box component="span" sx={{ ...tagSx, borderColor: color, color }}>{KIND_ONE[item.kind!]}</Box>}
-      {item.district && (
-        <Box component="span" title={item.district.nameHi ?? undefined} sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.8125rem", color }}>
+      {district && (
+        <Box component="span" title={district.nameHi ?? undefined} sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.8125rem", color }}>
           <MapPin size={13} aria-hidden />
-          {item.district.name}
-          <Box component="span" sx={{ opacity: 0.75 }}>({item.district.code})</Box>
+          {district.name}
+          <Box component="span" sx={{ opacity: 0.75 }}>({district.code})</Box>
         </Box>
       )}
     </Box>

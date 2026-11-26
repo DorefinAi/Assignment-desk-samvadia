@@ -1,5 +1,6 @@
 // The backend's item JSON (app/serialize.py item_out) and how it becomes the desk's IntakeItem.
-import { AiSuggestion, Attachment, AttachmentKind, District, DownloadState, Footage, FOOTAGE_STATUSES, FootageStatus, FtpListing, IntakeItem, ITEM_KINDS, ItemKind, KindCounts, ParsedSlug, Priority, Source, Stage } from "@/types/desk";
+import { API_URL } from "./api";
+import { AiSuggestion, Attachment, AttachmentKind, District, DownloadState, Footage, FOOTAGE_STATUSES, FootageStatus, FtpListing, IntakeItem, ITEM_KINDS, ItemKind, KindCounts, ParsedSlug, Priority, Source, Stage, ThreadMessage } from "@/types/desk";
 
 export interface ApiReporter {
   id: string;
@@ -48,6 +49,15 @@ export interface ApiMedia {
   state: string;
   ftp_path: string | null;
   error: string | null;
+  // Thread view; all optional so an older backend still maps
+  message_id?: string | null;
+  width?: number | null;
+  height?: number | null;
+  duration_seconds?: number | null;
+  /** "/media/{id}/thumb", relative to the API */
+  thumb_url?: string | null;
+  /** "/media/{id}/preview": a JPEG for photos, a 480p MP4 for videos */
+  preview_url?: string | null;
 }
 
 export interface ApiMessage {
@@ -55,6 +65,10 @@ export interface ApiMessage {
   text: string;
   subject: string | null;
   received_at: string;
+  source?: Source | null;
+  sender_contact?: string | null;
+  /** The text with quoted reply history stripped; missing on an older backend */
+  body_text?: string | null;
 }
 
 export interface ApiItem {
@@ -165,6 +179,10 @@ const KINDS: AttachmentKind[] = ["video", "image", "audio", "document"];
 // in_storage and on_ftp are both "we have the file"; link_only (a OneDrive link) counts as not downloaded
 const DOWNLOAD_STATE: Record<string, DownloadState> = { in_storage: "downloaded", on_ftp: "downloaded", downloading: "downloading", awaiting_upload: "downloading" };
 
+/** Media links come relative to the API. They are cookie-authenticated, so they go straight into <img>/<video>. */
+const mediaUrl = (path: string | null | undefined) => (!path ? null : /^(https?:|data:|blob:)/.test(path) ? path : API_URL + path);
+const num = (n: number | null | undefined) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? n : null);
+
 function toAttachment(m: ApiMedia): Attachment {
   return {
     id: m.id,
@@ -173,6 +191,26 @@ function toAttachment(m: ApiMedia): Attachment {
     sizeMb: (m.size_bytes ?? 0) / (1024 * 1024),
     state: DOWNLOAD_STATE[m.state] ?? "failed",
     progress: 0,
+    messageId: m.message_id ?? null,
+    width: num(m.width),
+    height: num(m.height),
+    durationSec: num(m.duration_seconds),
+    thumbUrl: mediaUrl(m.thumb_url),
+    previewUrl: mediaUrl(m.preview_url),
+    ftpPath: m.ftp_path ?? null,
+  };
+}
+
+function toMessage(m: ApiMessage, item: ApiItem): ThreadMessage {
+  const text = m.text ?? "";
+  return {
+    id: m.id,
+    source: m.source ?? item.source,
+    senderContact: m.sender_contact ?? item.sender_contact ?? "",
+    text,
+    bodyText: m.body_text?.trim() ? m.body_text : text,
+    subject: m.subject,
+    receivedAt: m.received_at,
   };
 }
 
@@ -185,7 +223,8 @@ function toStage(item: ApiItem): Stage {
 
 export function toIntakeItem(item: ApiItem): IntakeItem {
   const messages = item.messages ?? [];
-  const rawText = messages.map((m) => m.text).filter(Boolean).join("\n\n") || item.body || "";
+  // The new part of each message; quoted history would repeat the earlier ones
+  const rawText = messages.map((m) => m.body_text || m.text).filter(Boolean).join("\n\n") || item.body || "";
   const known = !!item.reporter;
   return {
     id: item.id,
@@ -199,6 +238,7 @@ export function toIntakeItem(item: ApiItem): IntakeItem {
     receivedAt: item.received_at,
     rawText,
     attachments: (item.media ?? []).map(toAttachment),
+    messages: item.messages ? item.messages.map((m) => toMessage(m, item)) : undefined,
     ai: NO_AI,
     aiHeadlineIndex: 0,
     draft: {

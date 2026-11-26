@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/common/shared";
 import InboxList, { InboxTab, SourceFilter, TAB_MATCH, visibleItems } from "@/components/inbox/InboxList";
 import StoryReview from "@/components/inbox/StoryReview";
 import PaneDivider from "@/components/inbox/PaneDivider";
+import { InboxStackedFilters, InboxTopBar } from "@/components/inbox/InboxToolbar";
 
 const param = (name: string) => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get(name));
 /** ?item=<id> deep link from the overview */
@@ -96,7 +97,9 @@ export default function InboxPage() {
     if (next) setSelectedId(next.id);
   };
 
-  const list = <InboxList items={items} tab={tab} onTab={setTab} source={source} onSource={setSource} query={query} onQuery={setQuery} selectedId={selectedId} onSelect={select} />;
+  // One row of filters above both panes on a computer; stacked on top of the list on a phone
+  const filterProps = { items, tab, onTab: setTab, source, onSource: setSource, query, onQuery: setQuery };
+  const list = <InboxList items={items} tab={tab} source={source} query={query} selectedId={selectedId} onSelect={select} header={twoPane ? undefined : <InboxStackedFilters {...filterProps} />} />;
   const detail = selected ? (
     <StoryReview key={selected.id} item={selected} onBack={twoPane ? undefined : () => setShowDetail(false)} editing={editing} onEditing={setEditing} onDecided={() => openNext(selected.id)} />
   ) : (
@@ -107,6 +110,7 @@ export default function InboxPage() {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      {twoPane && <InboxTopBar {...filterProps} />}
       {twoPane ? (
         <Box ref={panes} sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `${shownWidth}px 7px minmax(0, 1fr)` }}>
           <Box sx={{ minHeight: 0, minWidth: 0 }}>{list}</Box>

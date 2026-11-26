@@ -1,7 +1,8 @@
 // Dummy intake for the assignment desk. Stands in for the WhatsApp Business and
 // Outlook (Graph) connectors until they are wired to the backend.
-import { ActivityEntry, Attachment, AiSuggestion, FeedEntry, FetchRun, FtpFolder, IntakeItem, Sender, Source, Stage } from "@/types/desk";
+import { ActivityEntry, Attachment, AiSuggestion, DeskEvent, FeedEntry, FetchRun, FtpFolder, IntakeItem, Sender, Source, Stage, ThreadMessage } from "@/types/desk";
 import { buildSlug, dayOf } from "@/lib/slug";
+import { DEMO_CLIP, DEMO_STILL } from "./demoMedia";
 
 /** Where Octopus reads approved stories from. Placeholder until the real feed link is issued. */
 export const FEED_URL = "https://feeds.vartamaan.ai/1st-india/assignment-desk.xml";
@@ -10,7 +11,24 @@ export const OUTLOOK_MAILBOX = "assignment.desk@firstindia.example";
 
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60000).toISOString();
 
-type AttachmentSeed = Omit<Attachment, "id" | "state" | "progress"> & { state?: Attachment["state"]; progress?: number };
+type AttachmentSeed = Omit<Attachment, "id" | "state" | "progress" | "messageId"> & {
+  state?: Attachment["state"];
+  progress?: number;
+  /** Index into the seed's thread; the first message when left out */
+  msg?: number;
+};
+
+/** One message of a multi-message story; `before` is minutes before the story's latest message */
+interface MessageSeed {
+  before: number;
+  text: string;
+  /** The new part of an email reply; text then carries the quoted history too */
+  body?: string;
+  subject?: string;
+}
+
+/** A desk action between the messages; `before` as for MessageSeed */
+type EventSeed = Omit<DeskEvent, "id" | "at"> & { before: number };
 
 interface Seed {
   id: string;
@@ -23,16 +41,34 @@ interface Seed {
   ai: AiSuggestion;
   stage?: Stage;
   rejectReason?: string;
+  /** A story told over several messages; without it the story is one message of rawText */
+  thread?: MessageSeed[];
+  events?: EventSeed[];
 }
 
 function makeItem(seed: Seed, receivedAt: string): IntakeItem {
+  const { thread, events, ...rest } = seed;
   const firstLine = seed.rawText.split(/[।\n]/)[0].trim();
+  const at = (before: number) => new Date(new Date(receivedAt).getTime() - before * 60000).toISOString();
+  const messages: ThreadMessage[] | undefined = thread?.map((m, i) => ({
+    id: `${seed.id}-m${i + 1}`,
+    source: seed.source,
+    senderContact: seed.sender.contact,
+    text: m.text,
+    bodyText: m.body ?? m.text,
+    subject: m.subject ?? null,
+    receivedAt: at(m.before),
+  }));
   return {
-    ...seed,
+    ...rest,
     receivedAt,
-    attachments: seed.attachments.map((a, i) => ({
+    rawText: messages ? messages.map((m) => m.bodyText).join("\n\n") : seed.rawText,
+    messages,
+    deskEvents: events?.map((e, i) => ({ id: `${seed.id}-e${i + 1}`, at: at(e.before), kind: e.kind, by: e.by, text: e.text })),
+    attachments: seed.attachments.map(({ msg, ...a }, i) => ({
       ...a,
       id: `${seed.id}-a${i + 1}`,
+      messageId: messages ? messages[msg ?? 0]?.id : null,
       state: a.state ?? "downloaded",
       progress: a.state === "downloading" ? a.progress ?? 0 : 100,
     })),
@@ -60,10 +96,20 @@ const SEEDS: [Seed, number][] = [
       sender: { name: "Mahendra Singh Rathore", contact: "+91 90000 00101", role: "Reporter" },
       rawText:
         "जोधपुर में तेज बारिश से कई इलाकों में जलभराव। पावटा, सरदारपुरा और रातानाडा में सड़कों पर 2 फीट तक पानी भरा। नगर निगम की टीमें मौके पर पहुंचीं, पंप लगाकर पानी निकाला जा रहा है। विजुअल भेज रहा हूं, निगम आयुक्त की बाइट थोड़ी देर में।",
+      thread: [
+        { before: 6, text: "जोधपुर में तेज बारिश से कई इलाकों में जलभराव। पावटा, सरदारपुरा और रातानाडा में सड़कों पर 2 फीट तक पानी भरा।" },
+        { before: 3, text: "विजुअल भेज रहा हूं" },
+        { before: 0, text: "नगर निगम की टीमें मौके पर पहुंचीं, पंप लगाकर पानी निकाला जा रहा है। निगम आयुक्त की बाइट थोड़ी देर में।" },
+      ],
       attachments: [
-        { fileName: "VID-20261015-WA0012.mp4", kind: "video", sizeMb: 48.2 },
-        { fileName: "VID-20261015-WA0013.mp4", kind: "video", sizeMb: 36.7, state: "downloading", progress: 58 },
-        { fileName: "IMG-20261015-WA0014.jpg", kind: "image", sizeMb: 2.1 },
+        { msg: 1, fileName: "VID-20261015-WA0012.mp4", kind: "video", sizeMb: 48.2, durationSec: 48, width: 1280, height: 720, thumbUrl: DEMO_STILL.rain, previewUrl: DEMO_CLIP.rain, ftpPath: "Jodhpur/Nov/241126/JDH_RAIN_WATERLOGGING/VID-20261015-WA0012.mp4" },
+        { msg: 1, fileName: "VID-20261015-WA0015.mp4", kind: "video", sizeMb: 29.4, durationSec: 36, width: 1280, height: 720, thumbUrl: DEMO_STILL.road, previewUrl: DEMO_CLIP.rain },
+        { msg: 1, fileName: "IMG-20261015-WA0014.jpg", kind: "image", sizeMb: 2.1, width: 1600, height: 900, thumbUrl: DEMO_STILL.street, previewUrl: DEMO_STILL.street, ftpPath: "Jodhpur/Nov/241126/JDH_RAIN_WATERLOGGING/IMG-20261015-WA0014.jpg" },
+        { msg: 1, fileName: "IMG-20261015-WA0016.jpg", kind: "image", sizeMb: 1.8, width: 900, height: 1200, thumbUrl: DEMO_STILL.rainTall, previewUrl: DEMO_STILL.rainTall },
+        { msg: 1, fileName: "IMG-20261015-WA0017.jpg", kind: "image", sizeMb: 2.4, width: 1600, height: 900, thumbUrl: DEMO_STILL.pump, previewUrl: DEMO_STILL.pump },
+        { msg: 1, fileName: "IMG-20261015-WA0018.jpg", kind: "image", sizeMb: 2.2, width: 1600, height: 900, thumbUrl: DEMO_STILL.road, previewUrl: DEMO_STILL.road },
+        { msg: 1, fileName: "VID-20261015-WA0013.mp4", kind: "video", sizeMb: 36.7, state: "downloading", progress: 58 },
+        { msg: 2, fileName: "VID-20261015-WA0021.mp4", kind: "video", sizeMb: 61.0, durationSec: 72, width: 1280, height: 720, thumbUrl: DEMO_STILL.night, previewUrl: DEMO_CLIP.rain },
       ],
       ai: {
         headlines: ["जोधपुर में मूसलाधार बारिश, कई इलाकों में भरा 2 फीट पानी", "जोधपुर: तेज बारिश से पावटा-सरदारपुरा में जलभराव, निगम की टीमें तैनात", "बारिश से बेहाल जोधपुर, सड़कों पर पानी ही पानी"],
@@ -87,10 +133,34 @@ const SEEDS: [Seed, number][] = [
       sender: { name: "DIPR Rajasthan", contact: "press.dipr@gov.example.in", role: "Press release" },
       rawText:
         "प्रेस विज्ञप्ति। मुख्यमंत्री ने आज जयपुर के बिड़ला सभागार में आयोजित कार्यक्रम में 1,200 करोड़ रुपये की 46 विकास परियोजनाओं का लोकार्पण एवं शिलान्यास किया। इनमें सड़क, पेयजल और शहरी विकास से जुड़ी परियोजनाएं शामिल हैं। मुख्यमंत्री ने कहा कि सभी परियोजनाएं तय समय में पूरी की जाएंगी।\n\nसंलग्न: प्रेस नोट एवं फोटो",
+      thread: [
+        {
+          before: 30,
+          subject: "मुख्यमंत्री ने जयपुर में 1,200 करोड़ की विकास परियोजनाओं का लोकार्पण किया",
+          text: "प्रेस विज्ञप्ति। मुख्यमंत्री ने आज जयपुर के बिड़ला सभागार में आयोजित कार्यक्रम में 1,200 करोड़ रुपये की 46 विकास परियोजनाओं का लोकार्पण एवं शिलान्यास किया। इनमें सड़क, पेयजल और शहरी विकास से जुड़ी परियोजनाएं शामिल हैं। मुख्यमंत्री ने कहा कि सभी परियोजनाएं तय समय में पूरी की जाएंगी।\n\nसंलग्न: प्रेस नोट एवं फोटो",
+        },
+        {
+          before: 14,
+          subject: "Re: मुख्यमंत्री ने जयपुर में 1,200 करोड़ की विकास परियोजनाओं का लोकार्पण किया",
+          body: "वीडियो संलग्न है।",
+          text: "वीडियो संलग्न है।\n\nOn Tue, Assignment desk wrote:\n> कार्यक्रम का वीडियो भेजें।\n>\n> On Tue, DIPR Rajasthan wrote:\n>> प्रेस विज्ञप्ति। मुख्यमंत्री ने आज जयपुर के बिड़ला सभागार में आयोजित कार्यक्रम में 1,200 करोड़ रुपये की 46 विकास परियोजनाओं का लोकार्पण एवं शिलान्यास किया।",
+        },
+        {
+          before: 6,
+          subject: "RE: मुख्यमंत्री ने जयपुर में 1,200 करोड़ की विकास परियोजनाओं का लोकार्पण किया",
+          body: "संशोधित आंकड़ा: 46 नहीं, 48 परियोजनाएं।",
+          text: "संशोधित आंकड़ा: 46 नहीं, 48 परियोजनाएं।\n\nOn Tue, DIPR Rajasthan wrote:\n> वीडियो संलग्न है।",
+        },
+        { before: 0, subject: "Fwd: कार्यक्रम में मौजूद मंत्रियों की सूची", text: "कार्यक्रम में मौजूद मंत्रियों और विधायकों की सूची संलग्न है।" },
+      ],
+      events: [{ before: 22, kind: "sent_back", by: "Anita", text: "कार्यक्रम का वीडियो भेजें" }],
       attachments: [
         { fileName: "CM_Jaipur_Press_Note.pdf", kind: "document", sizeMb: 0.4 },
-        { fileName: "CM_Jaipur_01.jpg", kind: "image", sizeMb: 3.2 },
-        { fileName: "CM_Jaipur_02.jpg", kind: "image", sizeMb: 2.8 },
+        { fileName: "CM_Jaipur_01.jpg", kind: "image", sizeMb: 3.2, width: 1600, height: 1000, thumbUrl: DEMO_STILL.stage, previewUrl: DEMO_STILL.stage },
+        { fileName: "CM_Jaipur_02.jpg", kind: "image", sizeMb: 2.8, width: 1600, height: 1000, thumbUrl: DEMO_STILL.crowd, previewUrl: DEMO_STILL.crowd },
+        { msg: 1, fileName: "VID-CM-Birla-Auditorium.mp4", kind: "video", sizeMb: 86, durationSec: 125, width: 1920, height: 1080, thumbUrl: DEMO_STILL.stage, previewUrl: DEMO_CLIP.stage, ftpPath: "Jaipur/Nov/241126/JPR_CM_PROJECTS_LAUNCH/VID-CM-Birla-Auditorium.mp4" },
+        { msg: 1, fileName: "VID-CM-Speech.mp4", kind: "video", sizeMb: 38.5, durationSec: 54, width: 1920, height: 1080, thumbUrl: DEMO_STILL.crowd },
+        { msg: 3, fileName: "Ministers_List.docx", kind: "document", sizeMb: 0.1 },
       ],
       ai: {
         headlines: ["सीएम ने जयपुर को दी 1,200 करोड़ की सौगात, 46 परियोजनाओं का लोकार्पण", "जयपुर: 46 विकास परियोजनाओं का लोकार्पण-शिलान्यास, 1,200 करोड़ होंगे खर्च"],

@@ -1,8 +1,7 @@
 "use client";
 
-// Intake looks like the app each message came from: WhatsApp items like WhatsApp Web, Outlook items
-// like a mail reading pane. These are the surface colours for each theme; text and buttons keep the
-// desk theme. The WhatsApp values follow jazimabbas/whatsapp-web-ui (light and dark).
+// Intake shows every story as a chat, WhatsApp Web style, whether it came by WhatsApp or email.
+// These are the surface colours for each theme; text and buttons keep the desk theme. The WhatsApp values follow jazimabbas/whatsapp-web-ui (light and dark).
 import { useTheme } from "@mui/material";
 import { Source } from "@/types/desk";
 
@@ -36,12 +35,6 @@ export interface ChatColors {
   /** Yellow notice strip in the chat (rejected, sent to Octopus) */
   notice: string;
   noticeText: string;
-  /** Email reading pane */
-  mail: string;
-  /** Email secondary text: address, date, "to" */
-  mailMeta: string;
-  /** Email attachment card preview area */
-  mailTile: string;
 }
 
 const LIGHT: ChatColors = {
@@ -63,9 +56,6 @@ const LIGHT: ChatColors = {
   dateTagText: "#1f2a30",
   notice: "#fdf4c5",
   noticeText: "#3d3200",
-  mail: "#ffffff",
-  mailMeta: "#5e5e5e",
-  mailTile: "#f2f2f2",
 };
 
 const DARK: ChatColors = {
@@ -87,9 +77,6 @@ const DARK: ChatColors = {
   dateTagText: "rgba(241, 241, 242, 0.92)",
   notice: "#20272b",
   noticeText: "#fad964",
-  mail: "#1f1f1f",
-  mailMeta: "#c4c7c5",
-  mailTile: "#2a2a2a",
 };
 
 export function useChatColors(): ChatColors {

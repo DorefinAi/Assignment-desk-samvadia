@@ -22,6 +22,41 @@ export interface Attachment {
   state: DownloadState;
   /** 0-100 while downloading */
   progress: number;
+  /** The message it came with; null or missing puts it under the first message */
+  messageId?: string | null;
+  width?: number | null;
+  height?: number | null;
+  durationSec?: number | null;
+  /** Small still for the chat grid; full URL. Without it the file shows as a row, not a tile. */
+  thumbUrl?: string | null;
+  /** Viewer copy: a JPEG for photos, a 480p MP4 for videos; full URL */
+  previewUrl?: string | null;
+  /** Where the original sits on the FTP, once it is there */
+  ftpPath?: string | null;
+}
+
+/** One WhatsApp message or one email in the story's thread */
+export interface ThreadMessage {
+  id: string;
+  source: Source;
+  /** Phone number or email address; empty when the backend left it out */
+  senderContact: string;
+  /** As received, quoted reply history included */
+  text: string;
+  /** The new part only (quoted history stripped); same as text when nothing was stripped */
+  bodyText: string;
+  subject?: string | null;
+  receivedAt: string;
+}
+
+/** Something the desk did to the story, shown between the messages at the time it happened */
+export interface DeskEvent {
+  id: string;
+  at: string;
+  kind: "sent_back" | "rejected" | "held" | "note";
+  /** Who did it */
+  by?: string;
+  text: string;
 }
 
 export interface Sender {
@@ -69,8 +104,13 @@ export interface IntakeItem {
   /** Outlook subject line */
   subject?: string;
   receivedAt: string;
+  /** Every message's text joined, for search and the editor */
   rawText: string;
   attachments: Attachment[];
+  /** The messages in the story; missing on an older backend, which then shows rawText as one message */
+  messages?: ThreadMessage[];
+  /** Desk actions with a time; only the demo data has them so far */
+  deskEvents?: DeskEvent[];
   ai: AiSuggestion;
   /** Which of ai.headlines the AI panel is showing */
   aiHeadlineIndex: number;
