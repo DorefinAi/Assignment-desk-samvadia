@@ -32,7 +32,10 @@ export default function FootageSearchPane({ item, saving, onUse, onOpen }: Foota
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
   const [days, setDays] = useState(DAY_CHOICES[0]);
-  const [district, setDistrict] = useState(own);
+  // The story's own district by default, but only one with an FTP folder (the menu lists only those). Worked out on
+  // every render, since the district list may arrive after the pane opens.
+  const [picked, setPicked] = useState<string | null>(null);
+  const district = picked ?? (searchable.some((d) => d.code === own) ? own : "");
   // Try again: asks for the same search with fresh FTP listings. n makes a second retry a new request.
   const [retry, setRetry] = useState({ n: 0, of: "" });
   const [result, setResult] = useState<Result | null>(null);
@@ -65,8 +68,8 @@ export default function FootageSearchPane({ item, saving, onUse, onOpen }: Foota
 
   const tryAgain = () => setRetry((r) => ({ n: r.n + 1, of: search }));
 
-  const note = (title: string, detail?: string, canRetry?: boolean) => (
-    <Box sx={{ px: 2, py: 4, textAlign: "center" }}>
+  const note = (title: string, detail?: string, canRetry?: boolean, alert?: boolean) => (
+    <Box role={alert ? "alert" : undefined} sx={{ px: 2, py: 4, textAlign: "center" }}>
       <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600 }}>{title}</Typography>
       {detail && <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", mt: 0.5 }}>{detail}</Typography>}
       {canRetry && (
@@ -123,7 +126,7 @@ export default function FootageSearchPane({ item, saving, onUse, onOpen }: Foota
       />
 
       <Box sx={{ display: "flex", gap: 1, mt: 1.25, flexWrap: "wrap" }}>
-        <TextField select size="small" label="District" value={district} onChange={(e) => setDistrict(e.target.value)} sx={{ flex: 1, minWidth: 160 }}>
+        <TextField select size="small" label="District" value={district} onChange={(e) => setPicked(e.target.value)} sx={{ flex: 1, minWidth: 160 }}>
           {searchable.map((d) => (
             <MenuItem key={d.code} value={d.code}>
               {d.name}
@@ -148,7 +151,7 @@ export default function FootageSearchPane({ item, saving, onUse, onOpen }: Foota
             <CircularProgress size={22} color="inherit" aria-label="Searching" />
           </Box>
         ) : result?.error ? (
-          note("Couldn't search the FTP", result.error, true)
+          note("Couldn't search the FTP", result.error, true, true)
         ) : hits.length === 0 ? (
           note(q ? "No name has all those words" : "Nothing in these date folders", "Try fewer words or more days, or use Browse folders.", true)
         ) : (

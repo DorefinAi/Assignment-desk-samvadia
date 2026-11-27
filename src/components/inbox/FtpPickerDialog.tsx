@@ -30,6 +30,8 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
   const holdingFile = isFile && !moved;
   // A story that already has a folder opens on it; one without opens on search
   const [mode, setMode] = useState<"search" | "browse">(current ? "browse" : "search");
+  // Search is mounted the first time it is opened (not before: it would search the FTP unseen), then kept
+  const [searchOpened, setSearchOpened] = useState(mode === "search");
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const [saving, setSaving] = useState(false);
@@ -79,14 +81,17 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
 
         <Box role="group" aria-label="How to find the footage" sx={{ display: "flex", gap: 0.75, mb: 1.5 }}>
           {(["search", "browse"] as const).map((m) => (
-            <Button key={m} size="small" variant={mode === m ? "contained" : "outlined"} aria-pressed={mode === m} onClick={() => { setSaveError(null); setMode(m); }} sx={mode === m ? undefined : { borderColor: "divider", color: "text.primary" }}>
+            <Button key={m} size="small" variant={mode === m ? "contained" : "outlined"} aria-pressed={mode === m} onClick={() => { setSaveError(null); setMode(m); if (m === "search") setSearchOpened(true); }} sx={mode === m ? undefined : { borderColor: "divider", color: "text.primary" }}>
               {m === "search" ? "Search" : "Browse folders"}
             </Button>
           ))}
         </Box>
 
-        {mode === "search" && (
-          <FootageSearchPane item={item} saving={saving} onUse={(next) => save(next)} onOpen={(next) => { go(next); setMode("browse"); }} />
+        {/* Kept mounted while browsing: back on Search, the words and results are still there and the FTP is not asked again */}
+        {searchOpened && (
+          <Box hidden={mode !== "search"}>
+            <FootageSearchPane item={item} saving={saving} onUse={(next) => save(next)} onOpen={(next) => { go(next); setMode("browse"); }} />
+          </Box>
         )}
         {mode === "browse" && (
           <>
