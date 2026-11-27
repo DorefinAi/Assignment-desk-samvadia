@@ -199,6 +199,27 @@ export interface FtpListing {
   entries: FtpEntry[];
 }
 
+/** One match from GET /desk/items/{id}/footage/search */
+export interface FootageHit extends FtpEntry {
+  path: string;
+}
+
+export interface FootageSearch {
+  /** Everything that matched; `results` may hold fewer */
+  total: number;
+  results: FootageHit[];
+}
+
+export interface FootageSearchQuery {
+  q: string;
+  /** Days before and after the story's dates, 0-7 */
+  days: number;
+  /** District code; null for the story's own */
+  district: string | null;
+  /** Read the FTP again instead of the backend's cached listings */
+  fresh?: boolean;
+}
+
 /** Inbox time window. Custom times are IST wall-clock values ("2026-10-27T09:30"). */
 export type RangePreset = "any" | "1h" | "today" | "24h" | "custom";
 

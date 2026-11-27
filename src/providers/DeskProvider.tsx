@@ -310,6 +310,7 @@ function DemoDeskProvider({ reviewer, access, children }: { reviewer: string; ac
       recheckFootage: async () => {},
       setFootage: async () => "The FTP needs the backend.",
       browseFtp: () => Promise.reject(new Error("The FTP needs the backend.")),
+      searchFootage: () => Promise.reject(new Error("The FTP needs the backend.")),
     }),
     [state, shownItems, filters, setFilters, reviewer, role, access, users, setUserRole, refresh, updateDraft, resetSlug, applyAi, cycleAiHeadline, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive]
   );

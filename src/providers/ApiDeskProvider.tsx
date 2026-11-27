@@ -7,9 +7,9 @@
 //   access:    each read is asked for only when this person's pages and permissions allow it, so a /reporters- or
 //              /access-only login never gets refusals for the story list
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_FILTERS, District, FeedEntry, FetchRun, FtpFolder, FtpListing, InboxFilters, IntakeItem, KindCounts, StoryDraft } from "@/types/desk";
+import { DEFAULT_FILTERS, District, FeedEntry, FetchRun, FootageSearch, FootageSearchQuery, FtpFolder, FtpListing, InboxFilters, IntakeItem, KindCounts, StoryDraft } from "@/types/desk";
 import { ACCESS_CHANGED, api, API_URL, ApiError, isForbidden } from "@/lib/api";
-import { ApiDistrict, ApiItem, ApiItemList, ApiReporter, itemOf, keepDetail, rejectBody, toDistrict, toFtpListing, toIntakeItem, toKindCounts } from "@/lib/apiItems";
+import { ApiDistrict, ApiItem, ApiItemList, ApiReporter, itemOf, keepDetail, rejectBody, toDistrict, toFootageSearch, toFtpListing, toIntakeItem, toKindCounts } from "@/lib/apiItems";
 import { matchesFilters, rangeWindow, toIstIso } from "@/lib/ist";
 import { dayOf } from "@/lib/slug";
 import { Access, can, canLoadStories, isRole, Role } from "@/lib/rbac";
@@ -294,16 +294,20 @@ export default function ApiDeskProvider({ reviewer, access, children }: { review
 
   const setFootage = useCallback(
     async (id: string, path: string | null): Promise<string | null> => {
+      let sent: number | undefined;
       try {
         await flush(id);
-        const res = await api<ApiItem | { item: ApiItem }>(`/desk/items/${id}/footage`, { method: "PUT", body: { path, version: versions.current.get(id) } });
+        sent = versions.current.get(id);
+        const res = await api<ApiItem | { item: ApiItem }>(`/desk/items/${id}/footage`, { method: "PUT", body: { path, version: sent } });
         merge(itemOf(res));
         return null;
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
-          // Stale version: take the server's copy so the next try carries the new version
+          // A 409 is a stale version or a refusal (another district's folder). Take the server's copy: if the
+          // version did not move, the story did not change, so show the backend's reason.
           await reloadOne(id);
-          return "This story changed while you were picking. It has been reloaded; choose the folder again.";
+          if (versions.current.get(id) === sent) return err.message;
+          return "This story changed while you were picking. It has been reloaded; choose the footage again.";
         }
         return err instanceof Error ? err.message : "Could not save the folder. Try again.";
       }
@@ -314,6 +318,14 @@ export default function ApiDeskProvider({ reviewer, access, children }: { review
   const browseFtp = useCallback(async (path: string): Promise<FtpListing> => {
     const raw = await api<Parameters<typeof toFtpListing>[0]>(`/desk/ftp/browse?${new URLSearchParams({ path })}`);
     return toFtpListing(raw);
+  }, []);
+
+  const searchFootage = useCallback(async (id: string, { q, days, district, fresh }: FootageSearchQuery): Promise<FootageSearch> => {
+    const params = new URLSearchParams({ q, days: String(days) });
+    if (district) params.set("district", district);
+    if (fresh) params.set("fresh", "true");
+    const raw = await api<Parameters<typeof toFootageSearch>[0]>(`/desk/items/${id}/footage/search?${params}`);
+    return toFootageSearch(raw);
   }, []);
 
   const refresh = useCallback(() => {
@@ -381,8 +393,9 @@ export default function ApiDeskProvider({ reviewer, access, children }: { review
       recheckFootage,
       setFootage,
       browseFtp,
+      searchFootage,
     }),
-    [shownItems, folders, feed, runs, reviewer, role, access, users, reporters, notice, setUserRole, refresh, updateDraft, resetSlug, setReporter, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive, filters, setFilters, kindCounts, storiesAllowed, districts, recheckFootage, setFootage, browseFtp]
+    [shownItems, folders, feed, runs, reviewer, role, access, users, reporters, notice, setUserRole, refresh, updateDraft, resetSlug, setReporter, approve, reject, reopen, retryDownload, renameFolder, pushFeedUpdate, setFeedLive, filters, setFilters, kindCounts, storiesAllowed, districts, recheckFootage, setFootage, browseFtp, searchFootage]
   );
 
   return <DeskContext.Provider value={value}>{children}</DeskContext.Provider>;

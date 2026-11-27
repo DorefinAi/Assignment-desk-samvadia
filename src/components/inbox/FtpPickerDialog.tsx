@@ -1,7 +1,7 @@
 "use client";
 
-// Pick a story's footage folder by hand: browse the FTP read-only (GET /desk/ftp/browse), then save the folder
-// with PUT /desk/items/{id}/footage. Nothing on the FTP changes; only the story remembers the folder.
+// Pick a story's footage by hand: search the district's folders (FootageSearchPane) or browse the FTP read-only
+// (GET /desk/ftp/browse), then save the folder or file with PUT /desk/items/{id}/footage. Nothing on the FTP changes; only the story remembers the folder.
 import React, { useEffect, useState } from "react";
 import { Box, Button, ButtonBase, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from "@mui/material";
 import { ChevronRight, CornerLeftUp, File, Folder } from "lucide-react";
@@ -10,6 +10,7 @@ import { useDesk } from "@/providers/DeskProvider";
 import { istStamp } from "@/lib/ist";
 import { MONO } from "@/components/common/shared";
 import { megabytes } from "./footageMeta";
+import FootageSearchPane from "./FootageSearchPane";
 
 const parentOf = (path: string) => path.replace(/\/+$/, "").replace(/\/[^/]*$/, "") || "/";
 const join = (path: string, name: string) => `${path.replace(/\/+$/, "")}/${name}`;
@@ -20,13 +21,22 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
   const { browseFtp, setFootage, districts } = useDesk();
   const current = item.footage?.path ?? null;
   const districtFolder = districts.find((d) => d.code === item.district?.code)?.ftpFolder ?? null;
-  const [path, setPath] = useState(current ?? districtFolder ?? "/");
+  // The saved footage may be a single file (picked from search): browse from the folder that holds it
+  const files = item.footage?.files ?? [];
+  const isFile = !!current && files.length === 1 && current.endsWith(`/${files[0].name}`);
+  const [path, setPath] = useState((isFile ? parentOf(current) : current) ?? districtFolder ?? "/");
+  // Until the desk moves, that folder is only where the file sits: one click must not swap the file for all of it
+  const [moved, setMoved] = useState(false);
+  const holdingFile = isFile && !moved;
+  // A story that already has a folder opens on it; one without opens on search
+  const [mode, setMode] = useState<"search" | "browse">(current ? "browse" : "search");
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mode !== "browse") return; // no FTP listing while the desk is searching
     let live = true;
     browseFtp(path).then(
       (listing) => live && setResult({ path, listing }),
@@ -35,7 +45,7 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
     return () => {
       live = false;
     };
-  }, [browseFtp, path, attempt]);
+  }, [browseFtp, path, attempt, mode]);
 
   const loading = result?.path !== path;
   const entries = [...(result?.listing?.entries ?? [])].sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name));
@@ -44,6 +54,7 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
 
   const go = (next: string) => {
     setSaveError(null);
+    setMoved(true);
     setPath(next);
   };
 
@@ -60,11 +71,30 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm" slotProps={{ paper: { sx: { borderRadius: "16px" } } }}>
-      <DialogTitle sx={{ fontSize: "1rem", fontWeight: 700, pb: 0.5 }}>Pick the footage folder</DialogTitle>
+      <DialogTitle sx={{ fontSize: "1rem", fontWeight: 700, pb: 0.5 }}>Pick the footage</DialogTitle>
       <DialogContent>
         <Typography sx={{ fontSize: "0.8125rem", color: "text.secondary", mb: 1.5 }}>
-          Open the folder that holds this story&apos;s footage, then use it. The FTP is only read, never changed.
+          Find the folder or file that holds this story&apos;s footage, then use it. The FTP is only read, never changed.
         </Typography>
+
+        <Box role="group" aria-label="How to find the footage" sx={{ display: "flex", gap: 0.75, mb: 1.5 }}>
+          {(["search", "browse"] as const).map((m) => (
+            <Button key={m} size="small" variant={mode === m ? "contained" : "outlined"} aria-pressed={mode === m} onClick={() => { setSaveError(null); setMode(m); }} sx={mode === m ? undefined : { borderColor: "divider", color: "text.primary" }}>
+              {m === "search" ? "Search" : "Browse folders"}
+            </Button>
+          ))}
+        </Box>
+
+        {mode === "search" && (
+          <FootageSearchPane item={item} saving={saving} onUse={(next) => save(next)} onOpen={(next) => { go(next); setMode("browse"); }} />
+        )}
+        {mode === "browse" && (
+          <>
+        {holdingFile && (
+          <Typography sx={{ mb: 1, fontSize: "0.75rem", color: "text.secondary", wordBreak: "break-all" }}>
+            Saved now: the file {files[0].name}. To use a whole folder instead, open that folder first.
+          </Typography>
+        )}
 
         <Box component="nav" aria-label="Folder path" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.25, mb: 1, fontFamily: MONO, fontSize: "0.75rem" }}>
           <ButtonBase onClick={() => go("/")} sx={{ px: 0.5, borderRadius: "4px", fontFamily: "inherit", fontWeight: path === "/" ? 700 : 400 }}>
@@ -140,6 +170,8 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
         <Typography sx={{ mt: 1, fontSize: "0.75rem", color: "text.secondary" }}>
           {path === "/" ? "Open a district folder first." : loading || result?.error ? " " : `${fileCount} ${fileCount === 1 ? "file" : "files"} in this folder.`}
         </Typography>
+          </>
+        )}
         {saveError && (
           <Typography role="alert" sx={{ mt: 0.5, fontSize: "0.8125rem", color: "error.main" }}>
             {saveError}
@@ -155,9 +187,11 @@ export default function FtpPickerDialog({ item, onClose }: { item: IntakeItem; o
         <Button onClick={onClose} sx={{ color: "text.primary" }}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={() => save(path)} disabled={saving || loading || !!result?.error || path === "/"}>
-          {saving ? "Saving" : "Use this folder"}
-        </Button>
+        {mode === "browse" && (
+          <Button variant="contained" onClick={() => save(path)} disabled={saving || loading || !!result?.error || path === "/" || holdingFile}>
+            {saving ? "Saving" : "Use this folder"}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

@@ -3,7 +3,7 @@
 // What every desk screen reads and calls. Two providers fill it: the demo one (sample data, the default)
 // and the backend one (NEXT_PUBLIC_API_URL set). Screens never know which one they have.
 import { createContext, useContext } from "react";
-import { ActivityEntry, District, FeedEntry, FetchRun, FtpFolder, FtpListing, InboxFilters, IntakeItem, KindCounts, StoryDraft } from "@/types/desk";
+import { ActivityEntry, District, FeedEntry, FetchRun, FootageSearch, FootageSearchQuery, FtpFolder, FtpListing, InboxFilters, IntakeItem, KindCounts, StoryDraft } from "@/types/desk";
 import { Access, Role } from "@/lib/rbac";
 import { DeskUser } from "@/data/users";
 
@@ -70,6 +70,8 @@ export interface DeskContextValue {
   setFootage: (id: string, path: string | null) => Promise<string | null>;
   /** Read-only FTP listing for the folder picker */
   browseFtp: (path: string) => Promise<FtpListing>;
+  /** Read-only search of one district's folders around the story's dates */
+  searchFootage: (id: string, query: FootageSearchQuery) => Promise<FootageSearch>;
 }
 
 export const DeskContext = createContext<DeskContextValue | null>(null);

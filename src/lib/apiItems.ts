@@ -1,6 +1,6 @@
 // The backend's item JSON (app/serialize.py item_out) and how it becomes the desk's IntakeItem.
 import { API_URL } from "./api";
-import { AiSuggestion, Attachment, AttachmentKind, DeskEvent, District, DownloadState, Footage, FOOTAGE_STATUSES, FootageStatus, FtpListing, IntakeItem, ITEM_KINDS, ItemKind, KindCounts, ParsedSlug, Priority, ReviewState, Source, Stage, ThreadMessage } from "@/types/desk";
+import { AiSuggestion, Attachment, AttachmentKind, DeskEvent, District, DownloadState, Footage, FOOTAGE_STATUSES, FootageSearch, FootageStatus, FtpListing, IntakeItem, ITEM_KINDS, ItemKind, KindCounts, ParsedSlug, Priority, ReviewState, Source, Stage, ThreadMessage } from "@/types/desk";
 
 export interface ApiReporter {
   id: string;
@@ -146,6 +146,11 @@ function toFootage(f: ApiFootage | null | undefined): Footage | undefined {
 /** GET /desk/ftp/browse; entry sizes come as "size" */
 export function toFtpListing(raw: { path: string; entries?: { name: string; dir: boolean; size?: number | null; modified?: string | null }[] }): FtpListing {
   return { path: raw.path, entries: (raw.entries ?? []).map((e) => ({ name: e.name, dir: !!e.dir, bytes: e.size ?? null, modified: e.modified ?? null })) };
+}
+
+export function toFootageSearch(raw: { total?: number; results?: { name: string; path: string; dir: boolean; size?: number | null; modified?: string | null }[] }): FootageSearch {
+  const results = (raw.results ?? []).map((e) => ({ name: e.name, path: e.path, dir: !!e.dir, bytes: e.dir ? null : (e.size ?? null), modified: e.modified ?? null }));
+  return { total: raw.total ?? results.length, results };
 }
 
 /** Footage endpoints answer with the full item, bare or as {item} like the other actions */
