@@ -19,7 +19,10 @@ export const BUBBLE_MAX = { xs: "92%", md: "80%", lg: "70%", xl: "62%" };
 const TEXT = { fontSize: "0.90625rem", lineHeight: 1.6, display: "flow-root" } as const;
 const shadow = "0 1px 0.5px rgba(11, 20, 26, 0.13)";
 
-const EVENT_LABEL: Record<DeskEvent["kind"], string> = { sent_back: "Desk sent it back", rejected: "Rejected", held: "Put on hold", note: "Desk note" };
+const EVENT_LABEL: Record<DeskEvent["kind"], string> = {
+  sent_back: "Desk sent it back", rejected: "Rejected", held: "Put on hold", note: "Desk note",
+  approved: "Approved", duplicate: "Marked a duplicate", reopened: "Moved back to review",
+};
 
 const DeskEventLine = React.memo(function DeskEventLine({ event, c }: { event: DeskEvent; c: ChatColors }) {
   return (

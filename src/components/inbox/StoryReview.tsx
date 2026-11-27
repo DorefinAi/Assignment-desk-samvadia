@@ -55,6 +55,9 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
   const failed = item.attachments.filter((a) => a.state === "failed").length;
   const problem = !item.draft.slug && item.intakeNote ? item.intakeNote : !item.draft.headline.trim() ? "Add a headline first." : slugError(item.draft.slug, item.draft.locationCode) ? "Fix the slug first." : downloading ? `Waiting for ${downloading} ${downloading === 1 ? "file" : "files"} to download.` : null;
   const busy = item.stage === "filing" || item.stage === "filed";
+  // Sent back: waiting on the reporter, so not approvable until they reply or the desk moves it back
+  const sentBack = item.reviewState === "sent_back";
+  const decidable = item.stage === "new" && !sentBack;
   const email = item.source === "outlook";
 
   const counts = threadCounts(item);
@@ -226,7 +229,9 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
       >
         <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
           {!canReview && <Typography sx={note}>View only. The assignment desk approves stories.</Typography>}
-          {canReview && item.stage === "new" && (problem || failed > 0) && (
+          {sentBack && <Typography sx={note}>Sent back to the reporter. It comes back here when they reply.</Typography>}
+          {item.reviewState === "held" && <Typography sx={note}>On hold.</Typography>}
+          {canReview && decidable && (problem || failed > 0) && (
             <Typography sx={{ ...note, color: "warning.main" }}>{problem ?? `${failed} ${failed === 1 ? "file" : "files"} failed to download and won't go to Octopus.`}</Typography>
           )}
           {canReview && busy && (
@@ -246,7 +251,7 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
           <Button variant="outlined" onClick={() => onEditing(!editing)} aria-pressed={editing} startIcon={editing ? <Check size={15} /> : <Pencil size={15} />} sx={quietButtonSx}>
             {editing ? "Done" : canReview ? "Edit story" : "Story details"}
           </Button>
-          {canReview && item.stage === "new" && (
+          {canReview && decidable && (
             <>
               <Button variant="outlined" color="error" onClick={() => setRejecting(true)} startIcon={<X size={15} />} sx={{ backgroundColor: c.bubble }}>
                 Reject
@@ -278,7 +283,7 @@ export default function StoryReview({ item, onBack, editing, onEditing, onDecide
               )}
             </>
           )}
-          {canReview && item.stage === "rejected" && (
+          {canReview && (item.stage === "rejected" || sentBack || item.reviewState === "held") && (
             <Button variant="outlined" onClick={() => desk.reopen(item.id)} startIcon={<RotateCcw size={15} />} sx={quietButtonSx}>
               Move back to review
             </Button>

@@ -4,7 +4,7 @@
 // bar above on a computer, passed in as `header` on a phone.
 import React from "react";
 import { Box, Button, Typography } from "@mui/material";
-import { IntakeItem, Source } from "@/types/desk";
+import { IntakeItem, needsDecision, Source } from "@/types/desk";
 import { useNow } from "@/hooks/useNow";
 import { EmptyState, timeAgo } from "@/components/common/shared";
 import { useDesk } from "@/providers/DeskProvider";
@@ -83,7 +83,7 @@ export default function InboxList({ items, tab, source, query, selectedId, onSel
         )}
         {visible.map((item) => {
           const active = item.id === selectedId;
-          const waiting = item.stage === "new";
+          const waiting = needsDecision(item);
           return (
             <Box
               key={item.id}

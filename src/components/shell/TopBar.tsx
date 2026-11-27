@@ -12,6 +12,7 @@ import { useDesk } from "@/providers/DeskProvider";
 import { useThemeMode } from "@/providers/MuiProvider";
 import { Session } from "@/lib/auth";
 import { canOpen, homePage, ROLE_META } from "@/lib/rbac";
+import { needsDecision } from "@/types/desk";
 
 export default function TopBar({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const pathname = usePathname();
@@ -19,7 +20,7 @@ export default function TopBar({ session, onLogout }: { session: Session; onLogo
   const { mode, toggleTheme } = useThemeMode();
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
 
-  const toReview = items.filter((i) => i.stage === "new").length;
+  const toReview = items.filter(needsDecision).length;
   const tabs = [
     { label: "Overview", Icon: LayoutDashboard, path: "/dashboard" },
     { label: "Intake", Icon: Inbox, path: "/inbox", badge: toReview },

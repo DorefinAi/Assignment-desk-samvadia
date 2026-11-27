@@ -11,6 +11,7 @@ import NavigationLabel from "./NavigationLabel";
 import VartamaanMark from "./VartamaanMark";
 import { useDesk } from "@/providers/DeskProvider";
 import { canOpen } from "@/lib/rbac";
+import { needsDecision } from "@/types/desk";
 
 const COLLAPSED_WIDTH = 64;
 const EXPANDED_WIDTH = 224;
@@ -43,7 +44,7 @@ export default function LeftNavigation({ onLogout }: { onLogout: () => void }) {
     });
   };
 
-  const toReview = items.filter((i) => i.stage === "new").length;
+  const toReview = items.filter(needsDecision).length;
   const navItems = [
     { label: "Overview", icon: <LayoutDashboard />, path: "/dashboard" },
     { label: "Intake", icon: <Inbox />, path: "/inbox", badge: toReview },

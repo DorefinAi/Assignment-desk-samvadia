@@ -1,6 +1,6 @@
 // The backend's item JSON (app/serialize.py item_out) and how it becomes the desk's IntakeItem.
 import { API_URL } from "./api";
-import { AiSuggestion, Attachment, AttachmentKind, District, DownloadState, Footage, FOOTAGE_STATUSES, FootageStatus, FtpListing, IntakeItem, ITEM_KINDS, ItemKind, KindCounts, ParsedSlug, Priority, Source, Stage, ThreadMessage } from "@/types/desk";
+import { AiSuggestion, Attachment, AttachmentKind, DeskEvent, District, DownloadState, Footage, FOOTAGE_STATUSES, FootageStatus, FtpListing, IntakeItem, ITEM_KINDS, ItemKind, KindCounts, ParsedSlug, Priority, ReviewState, Source, Stage, ThreadMessage } from "@/types/desk";
 
 export interface ApiReporter {
   id: string;
@@ -86,9 +86,13 @@ export interface ApiItem {
   reporter: ApiReporter | null;
   intake_state: string;
   intake_note: string | null;
-  review_state: "pending" | "approved" | "rejected";
+  review_state: ReviewState;
   reject_reason: string | null;
   reject_note: string | null;
+  /** Desk answers only: who made the last decision, and every decision for the chat (desk_events with full=true) */
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  desk_events?: ApiDeskEvent[];
   ftp_folder: string | null;
   received_at: string;
   version: number;
@@ -155,13 +159,50 @@ const REJECT_CODES: Record<string, string> = {
   "Can't verify": "unverified",
   "Visuals not usable": "no_visuals",
 };
+/** Every backend reject code (alembic 0005); the first five use the desk dialog's wording */
 const REJECT_LABELS: Record<string, string> = {
   duplicate: "Duplicate of another story",
   not_newsworthy: "Not news / advertising",
   unverified: "Can't verify",
   no_visuals: "Visuals not usable",
   other: "Other",
+  pr_puff: "Release / event, no news value",
+  routine_event: "Routine diary event",
+  incomplete: "Missing quote / key facts",
+  wrong_beat: "Not our coverage area",
+  too_late: "Missed the slot / stale",
+  legal_risk: "Legal risk",
+  communal_risk: "Communally sensitive",
+  quality: "Copy unusable",
 };
+
+/** "Reason: note". The label is left out when the note already says it, or when the reason is just "other". */
+export function rejectText(code: string | null | undefined, note: string | null | undefined): string {
+  const label = REJECT_LABELS[code ?? "other"] ?? code ?? "Other";
+  const text = (note ?? "").trim();
+  if (!text) return label;
+  if ((code ?? "other") === "other" || text.startsWith(label)) return text;
+  return `${label}: ${text}`;
+}
+
+export interface ApiDeskEvent {
+  id: string;
+  action: string;
+  at: string;
+  by: string | null;
+  reject_reason: string | null;
+  note: string | null;
+  duplicate_of?: string | null;
+}
+
+const EVENT_KIND: Record<string, DeskEvent["kind"]> = {
+  approve: "approved", reject: "rejected", hold: "held", needs_more: "sent_back", duplicate: "duplicate", reopen: "reopened",
+};
+
+export function toDeskEvent(e: ApiDeskEvent): DeskEvent {
+  const kind = EVENT_KIND[e.action] ?? "note";
+  return { id: e.id, at: e.at, kind, by: e.by ?? undefined, text: kind === "rejected" ? rejectText(e.reject_reason, e.note) : (e.note ?? "") };
+}
 
 export function rejectBody(reason: string, note = ""): { reason: string; note?: string } {
   const code = REJECT_CODES[reason];
@@ -215,8 +256,9 @@ function toMessage(m: ApiMessage, item: ApiItem): ThreadMessage {
 }
 
 function toStage(item: ApiItem): Stage {
-  if (item.review_state === "rejected") return "rejected";
-  if (item.review_state === "pending") return "new";
+  // A duplicate is a kind of reject; held and sent back are still the desk's to decide
+  if (item.review_state === "rejected" || item.review_state === "duplicate") return "rejected";
+  if (item.review_state === "pending" || item.review_state === "held" || item.review_state === "sent_back") return "new";
   // Approved: in the feed once the files are on FTP
   return item.intake_state === "on_ftp" ? "published" : "filing";
 }
@@ -251,7 +293,13 @@ export function toIntakeItem(item: ApiItem): IntakeItem {
       slugEdited: item.slug_edited,
     },
     stage: toStage(item),
-    rejectReason: item.review_state === "rejected" ? item.reject_note || REJECT_LABELS[item.reject_reason ?? "other"] : undefined,
+    reviewState: item.review_state,
+    rejectReason:
+      item.review_state === "rejected" ? rejectText(item.reject_reason, item.reject_note)
+      : item.review_state === "duplicate" ? rejectText("duplicate", item.reject_note)
+      : undefined,
+    reviewedBy: item.reviewed_by ?? undefined,
+    deskEvents: item.desk_events?.map(toDeskEvent),
     folderId: item.ftp_folder ? item.id : undefined,
     intakeNote: item.intake_note ?? undefined,
     reporterId: item.reporter?.id,
@@ -269,5 +317,5 @@ export function toIntakeItem(item: ApiItem): IntakeItem {
  *  what is already known about the story: keep the earlier copy's values for whatever was left out. */
 export function keepDetail(next: ApiItem, prev: ApiItem | undefined): ApiItem {
   if (!prev) return next;
-  return { ...next, body: next.body ?? prev.body, media: next.media ?? prev.media, messages: next.messages ?? prev.messages };
+  return { ...next, body: next.body ?? prev.body, media: next.media ?? prev.media, messages: next.messages ?? prev.messages, desk_events: next.desk_events ?? prev.desk_events };
 }

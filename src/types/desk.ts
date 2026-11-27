@@ -7,6 +7,14 @@ export type Source = "whatsapp" | "outlook" | "portal";
 
 export type Stage = "new" | "rejected" | "filing" | "filed" | "published";
 
+/** The backend's review_state (app/models.py REVIEW_STATES) */
+export type ReviewState = "pending" | "approved" | "rejected" | "held" | "sent_back" | "duplicate";
+
+/** Waiting for the desk to decide: new or held. A sent-back story waits on the reporter, so badges leave it out
+ *  (it still lists under "To review", so the desk can find it). */
+export const needsDecision = (item: { stage: Stage; reviewState?: ReviewState }) =>
+  item.stage === "new" && item.reviewState !== "sent_back";
+
 export type Priority = "normal" | "high" | "breaking";
 
 export type AttachmentKind = "video" | "image" | "audio" | "document";
@@ -53,7 +61,7 @@ export interface ThreadMessage {
 export interface DeskEvent {
   id: string;
   at: string;
-  kind: "sent_back" | "rejected" | "held" | "note";
+  kind: "sent_back" | "rejected" | "held" | "note" | "approved" | "duplicate" | "reopened";
   /** Who did it */
   by?: string;
   text: string;
@@ -109,13 +117,15 @@ export interface IntakeItem {
   attachments: Attachment[];
   /** The messages in the story; missing on an older backend, which then shows rawText as one message */
   messages?: ThreadMessage[];
-  /** Desk actions with a time; only the demo data has them so far */
+  /** Desk decisions with a time (backend desk_events, or the demo data) */
   deskEvents?: DeskEvent[];
   ai: AiSuggestion;
   /** Which of ai.headlines the AI panel is showing */
   aiHeadlineIndex: number;
   draft: StoryDraft;
   stage: Stage;
+  /** Backend only: held and sent_back show as stage "new", duplicate as "rejected"; this tells them apart */
+  reviewState?: ReviewState;
   rejectReason?: string;
   reviewedBy?: string;
   folderId?: string;
